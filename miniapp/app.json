@@ -1,0 +1,16 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/result/result",
+    "pages/history/history"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#1A3A1A",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "稻谷查查",
+    "backgroundColor": "#1A1A1A",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

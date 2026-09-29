@@ -1,0 +1,67 @@
+.page-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  text-align: center;
+  padding: 30rpx 0 40rpx;
+}
+
+.empty-tip {
+  text-align: center;
+  color: #666666;
+  font-size: 28rpx;
+  padding: 100rpx 0;
+}
+
+.history-list {
+  margin-bottom: 30rpx;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #252525;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 16rpx;
+}
+
+.history-left {
+  flex: 1;
+}
+
+.history-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-bottom: 6rpx;
+}
+
+.history-date {
+  font-size: 22rpx;
+  color: #666666;
+}
+
+.verdict-badge {
+  padding: 8rpx 24rpx;
+  border-radius: 20rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.verdict-A { background: rgba(233,69,96,0.2); color: #E94560; }
+.verdict-B { background: rgba(15,157,88,0.2); color: #0F9D58; }
+.verdict-C { background: rgba(100,100,128,0.2); color: #B0B0B0; }
+
+.btn-clear {
+  background: transparent;
+  border: 1rpx solid #3A3A3A;
+  color: #666666;
+  font-size: 26rpx;
+  border-radius: 40rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+}
+
+.btn-clear::after { border: none; }

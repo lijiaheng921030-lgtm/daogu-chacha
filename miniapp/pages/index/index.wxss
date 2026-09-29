@@ -1,0 +1,91 @@
+.header {
+  text-align: center;
+  padding: 40rpx 0 50rpx;
+}
+
+.header-icon {
+  font-size: 80rpx;
+  margin-bottom: 16rpx;
+}
+
+.header-title {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 8rpx;
+}
+
+.header-sub {
+  font-size: 24rpx;
+  color: #666666;
+}
+
+.input-hint {
+  font-size: 22rpx;
+  color: #666666;
+  margin-top: 12rpx;
+}
+
+.quick-select .section-title {
+  margin-bottom: 16rpx;
+}
+
+.quick-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.quick-btn {
+  background: #1A1A1A;
+  border: 1rpx solid #3A3A3A;
+  border-radius: 40rpx;
+  padding: 16rpx 28rpx;
+  font-size: 26rpx;
+  color: #E0E0E0;
+}
+
+.quick-btn:active {
+  background: #252525;
+  border-color: #D4AF37;
+  color: #D4AF37;
+}
+
+.info-card .info-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.info-tag {
+  padding: 4rpx 16rpx;
+  border-radius: 6rpx;
+  font-size: 22rpx;
+  margin-right: 12rpx;
+  font-weight: 600;
+  background: rgba(212, 175, 55, 0.2);
+  color: #D4AF37;
+}
+
+.info-text {
+  font-size: 26rpx;
+  color: #B0B0B0;
+}
+
+.info-desc {
+  font-size: 24rpx;
+  color: #666666;
+  margin-top: 16rpx;
+  line-height: 1.6;
+}
+
+.history-entry {
+  text-align: center;
+  font-size: 26rpx;
+  color: #666666;
+  padding: 30rpx 0;
+}
+
+.history-entry:active {
+  color: #D4AF37;
+}

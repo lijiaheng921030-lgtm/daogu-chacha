@@ -1,0 +1,60 @@
+<view class="container">
+  <!-- 顶部标题 -->
+  <view class="header">
+    <view class="header-icon">🌾</view>
+    <view class="header-title">稻谷查查</view>
+    <view class="header-sub">个股综合分析 · 5维度归因</view>
+  </view>
+
+  <!-- 股票输入 -->
+  <view class="card input-wrap">
+    <view class="input-label">输入个股代码或名称</view>
+    <input
+      class="input-field"
+      placeholder="如：000733 或 振华科技"
+      value="{{stockInput}}"
+      bindinput="onInput"
+      bindconfirm="onSearch"
+    />
+    <view class="input-hint">支持6位代码或中文名称模糊匹配</view>
+  </view>
+
+  <!-- 快速选择 -->
+  <view class="card quick-select">
+    <view class="section-title">快速选择</view>
+    <view class="quick-btns">
+      <view class="quick-btn" bindtap="onQuickSelect" data-code="000733">振华科技</view>
+      <view class="quick-btn" bindtap="onQuickSelect" data-code="002475">立讯精密</view>
+      <view class="quick-btn" bindtap="onQuickSelect" data-code="600267">振华股份</view>
+      <view class="quick-btn" bindtap="onQuickSelect" data-code="600519">贵州茅台</view>
+    </view>
+  </view>
+
+  <!-- 分析按钮 -->
+  <button class="btn-primary" bindtap="onSearch" loading="{{loading}}">
+    {{loading ? '分析中...' : '🌾 开始分析'}}
+  </button>
+
+  <!-- 错误提示 -->
+  <view class="error-msg" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+
+  <!-- 功能说明 -->
+  <view class="card info-card">
+    <view class="section-title">分析维度</view>
+    <view class="info-row">
+      <view class="info-tag">T+1</view>
+      <view class="info-text">T+1策略回测 · 追涨/低吸裁决</view>
+    </view>
+    <view class="info-row">
+      <view class="info-tag">股性</view>
+      <view class="info-text">120日股性画像 · 波动性分析</view>
+    </view>
+    <view class="info-row">
+      <view class="info-tag">5维</view>
+      <view class="info-text">板块·竞价·筹码·情绪·席位</view>
+    </view>
+  </view>
+
+  <!-- 历史记录入口 -->
+  <view class="history-entry" bindtap="goHistory">📜 查看历史记录</view>
+</view>

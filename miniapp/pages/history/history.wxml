@@ -1,0 +1,23 @@
+<view class="container">
+  <view class="page-title">历史记录</view>
+
+  <view class="loading" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+  </view>
+
+  <view class="empty-tip" wx:if="{{!loading && history.length === 0}}">
+    暂无历史记录
+  </view>
+
+  <view class="history-list" wx:if="{{history.length > 0}}">
+    <view class="history-item" wx:for="{{history}}" wx:key="ts">
+      <view class="history-left">
+        <view class="history-name">{{item.stock_name}}</view>
+        <view class="history-date">{{item.date}}</view>
+      </view>
+      <view class="verdict-badge verdict-{{item.verdict}}">{{item.verdict_text}}</view>
+    </view>
+  </view>
+
+  <button class="btn-clear" wx:if="{{history.length > 0}}" bindtap="onClear">清空历史</button>
+</view>

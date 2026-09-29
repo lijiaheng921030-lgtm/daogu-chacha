@@ -1,0 +1,218 @@
+<view class="container">
+  <!-- 股票信息 -->
+  <view class="stock-info">
+    <view class="stock-name">{{stock_name}}</view>
+    <view class="stock-code">{{stock_code}}</view>
+  </view>
+
+  <!-- 加载中 -->
+  <view class="loading" wx:if="{{!report}}">
+    <view class="loading-spinner"></view>
+    <view class="loading-text">正在分析数据...</view>
+  </view>
+
+  <block wx:if="{{report}}">
+    <!-- 终极裁决 -->
+    <view class="verdict-card verdict-{{report.verdict}}">
+      <view class="verdict-label">🌾 稻谷裁决</view>
+      <view class="verdict-text">{{report.verdict_text}}</view>
+      <view class="verdict-sub">{{report.verdict_reason}}</view>
+    </view>
+
+    <!-- ========== 一、T+1策略 ========== -->
+    <view class="card">
+      <view class="section-title">一、T+1策略回测</view>
+      <view class="strategy-list">
+        <view class="strategy-item" wx:for="{{report.top3_strategies}}" wx:key="index">
+          <view class="strategy-rank rank-{{index + 1}}">{{index + 1}}</view>
+          <view class="strategy-content">
+            <view class="strategy-header">
+              <text class="tag tag-{{item.type === '追涨' ? 'zhuichang' : 'dixi'}}">{{item.type}}</text>
+              <text class="strategy-cond">{{item.bias_cond}} + {{item.v_cond}}</text>
+            </view>
+            <view class="strategy-metrics">
+              <view class="metric">
+                <text class="metric-val">{{item.WR}}%</text>
+                <text class="metric-label">胜率</text>
+              </view>
+              <view class="metric">
+                <text class="metric-val">+{{item.AvgWin}}%</text>
+                <text class="metric-label">均涨</text>
+              </view>
+              <view class="metric">
+                <text class="metric-val">+{{item.AvgHigh}}%</text>
+                <text class="metric-label">均高</text>
+              </view>
+              <view class="metric highlight">
+                <text class="metric-val">{{item.E}}%</text>
+                <text class="metric-label">期望收益</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- ========== 二、股性画像 ========== -->
+    <view class="card">
+      <view class="section-title">二、股性画像（120日）</view>
+
+      <view class="stats-grid" style="margin-bottom:16rpx;">
+        <view class="stat-item">
+          <view class="stat-value">{{report.stock_profile.trend_status}}</view>
+          <view class="stat-label">趋势状态</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{report.stock_profile.close_vs_ma5}}</view>
+          <view class="stat-label">收盘vs5日线</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{report.stock_profile.close_vs_ma20}}</view>
+          <view class="stat-label">收盘vs20日线</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{report.stock_profile.current_volume_ratio}}</view>
+          <view class="stat-label">当前量比</view>
+        </view>
+      </view>
+
+      <view class="stats-row" style="margin-bottom:16rpx;">
+        <text class="stat-pill red">阳线 {{report.stock_profile.yangxian_days}}天</text>
+        <text class="stat-pill">阴线 {{report.stock_profile.yinxian_days}}天</text>
+        <text class="stat-pill">涨停 {{report.stock_profile.limit_up_count}}次</text>
+        <text class="stat-pill">振幅 {{report.stock_profile.avg_amplitude}}%</text>
+      </view>
+
+      <view class="stats-grid">
+        <view class="stat-item">
+          <view class="stat-value" style="color:#D4AF37;">{{report.stock_profile.price_high}}</view>
+          <view class="stat-label">近60日最高</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{report.stock_profile.price_low}}</view>
+          <view class="stat-label">近60日最低</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value" style="color:#E94560;">{{report.stock_profile.dist_high}}</view>
+          <view class="stat-label">距高点</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value" style="color:#0F9D58;">{{report.stock_profile.dist_low}}</view>
+          <view class="stat-label">距低点</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- ========== 三~七、五维度 ========== -->
+    <view class="card">
+      <view class="section-title">三~七、五维度归因</view>
+
+      <!-- 维度一 -->
+      <view style="margin-bottom:20rpx;">
+        <view style="display:flex;align-items:center;margin-bottom:12rpx;">
+          <text class="dim-tag">维度一</text>
+          <text style="font-size:26rpx;color:#E0E0E0;margin-left:12rpx;">板块联动</text>
+        </view>
+        <table class="dim-table">
+          <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+          <tr><td>所属行业</td><td class="val">{{report.dim1.industry}}</td><td></td></tr>
+          <tr><td>板块涨幅</td><td class="val">{{report.dim1.sector_pct}}</td><td>{{report.dim1.sector_comment}}</td></tr>
+          <tr><td>Alpha</td><td class="val">{{report.dim1.alpha}}</td><td>{{report.dim1.alpha_comment}}</td></tr>
+        </table>
+      </view>
+
+      <!-- 维度二 -->
+      <view style="margin-bottom:20rpx;">
+        <view style="display:flex;align-items:center;margin-bottom:12rpx;">
+          <text class="dim-tag">维度二</text>
+          <text style="font-size:26rpx;color:#E0E0E0;margin-left:12rpx;">盘口竞价</text>
+        </view>
+        <table class="dim-table">
+          <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+          <tr><td>竞价开盘涨幅</td><td class="val">{{report.dim2.auction_open_pct}}</td><td>{{report.dim2.auction_comment}}</td></tr>
+          <tr><td>T-1日K线形态</td><td class="val">{{report.dim2.t1_candle}}</td><td>{{report.dim2.candle_comment}}</td></tr>
+          <tr><td>T-1尾盘评判</td><td class="val">{{report.dim2.t1_tail_action}}</td><td>{{report.dim2.tail_comment}}</td></tr>
+        </table>
+      </view>
+
+      <!-- 维度三 -->
+      <view style="margin-bottom:20rpx;">
+        <view style="display:flex;align-items:center;margin-bottom:12rpx;">
+          <text class="dim-tag">维度三</text>
+          <text style="font-size:26rpx;color:#E0E0E0;margin-left:12rpx;">筹码分布</text>
+        </view>
+        <table class="dim-table">
+          <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+          <tr><td>筹码获利比例</td><td class="val" style="color:#E94560;">{{report.dim3.win_rate}}</td><td>{{report.dim3.win_rate_comment}}</td></tr>
+          <tr><td>距半年线</td><td class="val">{{report.dim3.dist_ma120}}</td><td>{{report.dim3.ma120_comment}}</td></tr>
+          <tr><td>距年线</td><td class="val">{{report.dim3.dist_ma250}}</td><td>{{report.dim3.ma250_comment}}</td></tr>
+          <tr><td>阻力评估</td><td class="val">{{report.dim3.resistance}}</td><td>{{report.dim3.resistance_comment}}</td></tr>
+        </table>
+      </view>
+
+      <!-- 维度四 -->
+      <view style="margin-bottom:20rpx;">
+        <view style="display:flex;align-items:center;margin-bottom:12rpx;">
+          <text class="dim-tag">维度四</text>
+          <text style="font-size:26rpx;color:#E0E0E0;margin-left:12rpx;">情绪周期</text>
+        </view>
+        <table class="dim-table">
+          <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+          <tr><td>涨停家数</td><td class="val">{{report.dim4.limit_up}}</td><td></td></tr>
+          <tr><td>跌停家数</td><td class="val">{{report.dim4.limit_down}}</td><td></td></tr>
+          <tr><td>市场情绪</td><td class="val">{{report.dim4.sentiment}}</td><td>{{report.dim4.sentiment_comment}}</td></tr>
+          <tr><td>沪深300涨跌幅</td><td class="val">{{report.dim4.hs300_pct}}</td><td></td></tr>
+        </table>
+      </view>
+
+      <!-- 维度五 -->
+      <view>
+        <view style="display:flex;align-items:center;margin-bottom:12rpx;">
+          <text class="dim-tag">维度五</text>
+          <text style="font-size:26rpx;color:#E0E0E0;margin-left:12rpx;">资金席位</text>
+        </view>
+        <table class="dim-table">
+          <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+          <tr><td>融资余额</td><td class="val">{{report.dim5.margin_balance}}</td><td></td></tr>
+          <tr><td>余额变动</td><td class="val">{{report.dim5.margin_change}}</td><td>{{report.dim5.margin_comment}}</td></tr>
+          <tr><td>大宗交易</td><td class="val">{{report.dim5.block_trade}}</td><td></td></tr>
+        </table>
+      </view>
+    </view>
+
+    <!-- ========== 八、综合结论 ========== -->
+    <view class="card">
+      <view class="section-title">八、综合结论</view>
+      <view class="exec-text" style="line-height:2;">
+        <view style="margin-bottom:12rpx;">
+          <text style="color:#D4AF37;font-weight:600;">趋势：</text>{{report.conclusion.trend}}
+        </view>
+        <view style="margin-bottom:12rpx;">
+          <text style="color:#D4AF37;font-weight:600;">T+1策略：</text>{{report.conclusion.strategy}}
+        </view>
+        <view style="margin-bottom:12rpx;">
+          <text style="color:#D4AF37;font-weight:600;">板块：</text>{{report.conclusion.sector}}
+        </view>
+        <view style="margin-bottom:12rpx;">
+          <text style="color:#D4AF37;font-weight:600;">筹码：</text>{{report.conclusion.chip}}
+        </view>
+        <view style="margin-bottom:12rpx;">
+          <text style="color:#D4AF37;font-weight:600;">情绪：</text>{{report.conclusion.sentiment}}
+        </view>
+        <view style="margin-bottom:12rpx;">
+          <text style="color:#D4AF37;font-weight:600;">资金：</text>{{report.conclusion.fund}}
+        </view>
+      </view>
+    </view>
+
+    <!-- 风险提示 -->
+    <view class="card" style="background:#1A1A1A;border:1rpx solid #3A3A3A;">
+      <view style="color:#666666;font-size:22rpx;line-height:1.8;">
+        ⚠️ 风险提示：以上为纯数据回测结果，不构成投资建议。实盘操作自负盈亏，请严格止损。
+      </view>
+    </view>
+  </block>
+
+  <!-- 返回按钮 -->
+  <button class="btn-primary" bindtap="goBack" style="margin-top:30rpx;">🌾 再查一只</button>
+</view>
