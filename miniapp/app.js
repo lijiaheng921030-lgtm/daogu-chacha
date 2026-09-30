@@ -1,6 +1,6 @@
 App({
   globalData: {
-    apiBase: 'http://localhost:3002',
+    apiBase: 'https://daogu-chacha.lijiaheng921030.workers.dev',
     historyKey: 'daogu_history',
   }
 })
