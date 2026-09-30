@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { execSync } = require('child_process');
+const { analyze } = require('./backtest.js');
 const path = require('path');
 const fs = require('fs');
 
@@ -61,19 +61,11 @@ app.post('/api/analyze', async (req, res) => {
       return res.json({ code: 404, msg: '获取K线数据失败，可能停牌或代码错误' });
     }
 
-    const csvPath = path.join(__dirname, 'temp_kline.csv');
-    // 调用backtest.py（自己获取K线）
-    const backtestPy = path.join(__dirname, 'backtest.py');
-    const result = execSync(`python3 "${backtestPy}" "${thscode}"`, {
-      encoding: 'utf-8',
-      timeout: 60000,
-      cwd: __dirname,
-    });
-
-    const report = JSON.parse(result);
-    const codeNum = thscode.split('.')[0];
-    report.stock_code = thscode;
-    report.stock_name = stockNameMap[codeNum] || codeNum;
+    // 调用JS版回测（无需Python）
+    const report = await analyze(thscode);
+    if (report.error) {
+      return res.json({ code: 500, msg: report.error });
+    }
 
     res.json({ code: 0, data: report });
 
