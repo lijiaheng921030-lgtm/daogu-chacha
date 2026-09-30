@@ -62,11 +62,9 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     const csvPath = path.join(__dirname, 'temp_kline.csv');
-    writeKlineToCSV(klineData, csvPath);
-
-    // 直接调用backtest.py，传入ts_code和csv_path
+    // 调用backtest.py（自己获取K线）
     const backtestPy = path.join(__dirname, 'backtest.py');
-    const result = execSync(`py -3 "${backtestPy}" "${thscode}" "${csvPath}"`, {
+    const result = execSync(`python3 "${backtestPy}" "${thscode}"`, {
       encoding: 'utf-8',
       timeout: 60000,
       cwd: __dirname,

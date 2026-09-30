@@ -1,6 +1,6 @@
 App({
   globalData: {
-    apiBase: 'https://daogu-chacha.lijiaheng921030.workers.dev',
+    apiBase: 'https://daogu-server-production.up.railway.app',
     historyKey: 'daogu_history',
   }
 })

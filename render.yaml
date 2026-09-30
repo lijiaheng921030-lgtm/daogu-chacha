@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: daogu-chacha
+    env: node
+    region: oregon
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 3002
+      - key: TUSHARE_TOKEN
+        value: 42f7594e9640ff73a5b018a021a4141ab9012c37d6e6d599bb6221eb

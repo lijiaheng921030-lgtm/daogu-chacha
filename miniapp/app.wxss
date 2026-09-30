@@ -30,7 +30,7 @@ page {
   color: #1A1A1A;
   border-radius: 50rpx;
   height: 96rpx;
-  line-height: 96rpx;
+  line-height: 60rpx;
   font-size: 32rpx;
   font-weight: 600;
   border: none;
