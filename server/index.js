@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3002;
 app.use(cors());
 app.use(express.json());
 
-const TUSHARE_TOKEN = process.env.TUSHARE_TOKEN || '42f7594e9640ff73a5b018a021a4141ab9012c37d6e6d599bb6221eb';
+const TUSHARE_TOKEN = process.env.TUSHARE_TOKEN || '408d073d81acebc8bc76faa303be7de7d0067343625bc2fcc9869aea';
 const TUSHARE_URL = 'https://t.xiaodefa.top/';
 
 const stockMap = {
