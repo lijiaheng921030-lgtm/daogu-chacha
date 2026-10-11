@@ -34,6 +34,25 @@ app.get('/api/health', (req, res) => {
   res.json({ code: 0, msg: 'ok', data: { status: 'running', service: '稻谷查查1.0' } });
 });
 
+app.get('/api/debug-token', (req, res) => {
+  const tokenPrefix = TUSHARE_TOKEN.substring(0, 8);
+  res.json({ token_prefix: tokenPrefix, token_length: TUSHARE_TOKEN.length });
+});
+
+app.post('/api/debug-fetch', async (req, res) => {
+  const { ts_code } = req.body;
+  const today = new Date();
+  const endDate = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+  const payload = { api_name: 'daily', token: TUSHARE_TOKEN, params: { ts_code, start_date: '20250101', end_date: endDate } };
+  try {
+    const resp = await fetch(TUSHARE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const j = await resp.json();
+    res.json({ tushare_code: j.code, tushare_msg: j.msg, items_count: j.data ? j.data.items.length : 0 });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 app.post('/api/analyze', async (req, res) => {
   const { stock_code } = req.body;
   if (!stock_code) {
