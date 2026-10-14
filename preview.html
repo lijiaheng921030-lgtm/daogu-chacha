@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>稻谷查查1.0 - 振华科技分析结果预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1A1A1A;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 20px;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  .header {
+    text-align: center;
+    padding: 30px 0;
+    border-bottom: 1px solid #3A3A3A;
+    margin-bottom: 20px;
+  }
+  .header-icon { font-size: 40px; }
+  .header-title { font-size: 22px; font-weight: 700; color: #D4AF37; }
+  .stock-info { text-align: center; padding: 20px 0; }
+  .stock-name { font-size: 24px; font-weight: 700; }
+  .stock-code { font-size: 14px; color: #666; margin-top: 4px; }
+
+  .card {
+    background: #252525;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-size: 14px;
+    color: #B0B0B0;
+    margin-bottom: 16px;
+    padding-left: 10px;
+    border-left: 3px solid #D4AF37;
+  }
+
+  /* 裁决卡片 */
+  .verdict-card {
+    border-radius: 16px;
+    padding: 30px 20px;
+    text-align: center;
+    border: 2px solid;
+    margin-bottom: 16px;
+  }
+  .verdict-C {
+    background: linear-gradient(135deg, rgba(100,100,128,0.15), rgba(100,100,128,0.05));
+    border-color: #666;
+  }
+  .verdict-label { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .verdict-text { font-size: 28px; font-weight: 800; color: #888; }
+  .verdict-sub { font-size: 12px; color: #666; margin-top: 8px; }
+
+  /* 统计数据网格 */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .stat-item {
+    background: #1A1A1A;
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-value { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+  .stat-label { font-size: 11px; color: #666; }
+
+  .stats-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .stat-pill {
+    background: #1A1A1A;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #B0B0B0;
+  }
+  .stat-pill.red { color: #E94560; }
+
+  /* 策略列表 */
+  .strategy-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 14px 0;
+    border-bottom: 1px solid #3A3A3A;
+  }
+  .strategy-item:last-child { border-bottom: none; }
+  .strategy-rank {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    margin-right: 12px;
+    flex-shrink: 0;
+    background: #D4AF37;
+    color: #1A1A1A;
+  }
+  .rank-2 { background: #C0C0C0; }
+  .rank-3 { background: #CD7F32; }
+  .strategy-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .tag-dixi { background: rgba(15,157,88,0.2); color: #0F9D58; }
+  .strategy-cond { font-size: 13px; color: #ccc; }
+  .strategy-metrics { display: flex; gap: 16px; }
+  .metric { text-align: center; }
+  .metric-val { display: block; font-size: 15px; font-weight: 600; color: #ccc; }
+  .metric.highlight .metric-val { color: #D4AF37; }
+  .metric-label { display: block; font-size: 10px; color: #666; }
+
+  /* 五维度表格 */
+  .dim-section { margin-bottom: 16px; }
+  .dim-header { display: flex; align-items: center; margin-bottom: 10px; }
+  .dim-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: rgba(212,175,55,0.2);
+    color: #D4AF37;
+  }
+  .dim-name { font-size: 14px; color: #ccc; margin-left: 8px; }
+  .dim-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  .dim-table th {
+    background: #1A1A1A;
+    color: #666;
+    padding: 10px 6px;
+    text-align: left;
+    font-weight: normal;
+  }
+  .dim-table td { padding: 10px 6px; border-top: 1px solid #3A3A3A; color: #ccc; }
+  .dim-table .val { color: #D4AF37; font-weight: 600; }
+  .dim-table .red { color: #E94560; }
+
+  /* 综合结论 */
+  .exec-item { margin-bottom: 10px; }
+  .exec-label { color: #D4AF37; font-weight: 600; font-size: 14px; }
+  .exec-value { color: #ccc; font-size: 14px; }
+
+  /* 风险提示 */
+  .risk-tip {
+    background: #1A1A1A;
+    border: 1px solid #3A3A3A;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 10px;
+  }
+  .risk-text { color: #666; font-size: 11px; line-height: 1.7; }
+
+  /* 按钮 */
+  .btn-primary {
+    background: linear-gradient(135deg, #D4AF37, #B8962E);
+    color: #1A1A1A;
+    border-radius: 50px;
+    height: 48px;
+    line-height: 48px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    text-align: center;
+    margin-top: 16px;
+  }
+
+  .color-red { color: #E94560; }
+  .color-green { color: #0F9D58; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">🌾</div>
+  <div class="header-title">稻谷查查 1.0</div>
+</div>
+
+<div class="stock-info">
+  <div class="stock-name">振华科技</div>
+  <div class="stock-code">000733.SZ</div>
+</div>
+
+<!-- 终极裁决 -->
+<div class="verdict-card verdict-C">
+  <div class="verdict-label">🌾 稻谷裁决</div>
+  <div class="verdict-text">不适合做T+1</div>
+  <div class="verdict-sub">低吸信号</div>
+</div>
+
+<!-- T+1策略回测 -->
+<div class="card">
+  <div class="section-title">一、T+1策略回测</div>
+  <div class="strategy-item">
+    <div class="strategy-rank">1</div>
+    <div class="strategy-content">
+      <div class="strategy-header">
+        <span class="tag tag-dixi">低吸</span>
+        <span class="strategy-cond">bias20&lt;5 + 量比&lt;0.9</span>
+      </div>
+      <div class="strategy-metrics">
+        <div class="metric">
+          <span class="metric-val">60%</span>
+          <span class="metric-label">胜率</span>
+        </div>
+        <div class="metric">
+          <span class="metric-val">+2.651%</span>
+          <span class="metric-label">均涨</span>
+        </div>
+        <div class="metric">
+          <span class="metric-val">+2.154%</span>
+          <span class="metric-label">均高</span>
+        </div>
+        <div class="metric highlight">
+          <span class="metric-val">-0.137%</span>
+          <span class="metric-label">期望收益</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="strategy-item">
+    <div class="strategy-rank rank-2">2</div>
+    <div class="strategy-content">
+      <div class="strategy-header">
+        <span class="tag tag-dixi">低吸</span>
+        <span class="strategy-cond">bias20&lt;8 + 量比&lt;0.9</span>
+      </div>
+      <div class="strategy-metrics">
+        <div class="metric"><span class="metric-val">60%</span><span class="metric-label">胜率</span></div>
+        <div class="metric"><span class="metric-val">+2.651%</span><span class="metric-label">均涨</span></div>
+        <div class="metric"><span class="metric-val">+2.154%</span><span class="metric-label">均高</span></div>
+        <div class="metric highlight"><span class="metric-val">-0.137%</span><span class="metric-label">期望收益</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="strategy-item">
+    <div class="strategy-rank rank-3">3</div>
+    <div class="strategy-content">
+      <div class="strategy-header">
+        <span class="tag tag-dixi">低吸</span>
+        <span class="strategy-cond">bias20&lt;10 + 量比&lt;0.9</span>
+      </div>
+      <div class="strategy-metrics">
+        <div class="metric"><span class="metric-val">60%</span><span class="metric-label">胜率</span></div>
+        <div class="metric"><span class="metric-val">+2.651%</span><span class="metric-label">均涨</span></div>
+        <div class="metric"><span class="metric-val">+2.154%</span><span class="metric-label">均高</span></div>
+        <div class="metric highlight"><span class="metric-val">-0.137%</span><span class="metric-label">期望收益</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 股性画像 -->
+<div class="card">
+  <div class="section-title">二、股性画像（120日）</div>
+  <div class="stats-grid">
+    <div class="stat-item">
+      <div class="stat-value">空头排列</div>
+      <div class="stat-label">趋势状态</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">-1.15%</div>
+      <div class="stat-label">收盘vs5日线</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">-4.81%</div>
+      <div class="stat-label">收盘vs20日线</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">1.18</div>
+      <div class="stat-label">当前量比</div>
+    </div>
+  </div>
+  <div class="stats-row">
+    <span class="stat-pill red">阳线 27天</span>
+    <span class="stat-pill">阴线 33天</span>
+    <span class="stat-pill">涨停 3次</span>
+    <span class="stat-pill">振幅 3.12%</span>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-item">
+      <div class="stat-value color-red">49.78元</div>
+      <div class="stat-label">近60日最高</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">37.05元</div>
+      <div class="stat-label">近60日最低</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value color-red">-22.9%</div>
+      <div class="stat-label">距高点</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value color-green">+3.6%</div>
+      <div class="stat-label">距低点</div>
+    </div>
+  </div>
+</div>
+
+<!-- 五维度归因 -->
+<div class="card">
+  <div class="section-title">三~七、五维度归因</div>
+
+  <div class="dim-section">
+    <div class="dim-header">
+      <span class="dim-tag">维度一</span>
+      <span class="dim-name">板块联动</span>
+    </div>
+    <table class="dim-table">
+      <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+      <tr><td>所属行业</td><td class="val">元器件</td><td></td></tr>
+      <tr><td>板块涨幅</td><td class="val">-0.29%</td><td>跟随板块</td></tr>
+      <tr><td>Alpha</td><td class="val">-0.29%</td><td>无明显超额</td></tr>
+    </table>
+  </div>
+
+  <div class="dim-section">
+    <div class="dim-header">
+      <span class="dim-tag">维度二</span>
+      <span class="dim-name">盘口竞价</span>
+    </div>
+    <table class="dim-table">
+      <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+      <tr><td>竞价开盘涨幅</td><td class="val">-0.18%</td><td>正常</td></tr>
+      <tr><td>T-1日K线形态</td><td class="val">正常</td><td>正常</td></tr>
+      <tr><td>T-1尾盘评判</td><td class="val">尾盘正常</td><td>无异动</td></tr>
+    </table>
+  </div>
+
+  <div class="dim-section">
+    <div class="dim-header">
+      <span class="dim-tag">维度三</span>
+      <span class="dim-name">筹码分布</span>
+    </div>
+    <table class="dim-table">
+      <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+      <tr><td>筹码获利比例</td><td class="val red">4.6%</td><td>极度低位套牢区</td></tr>
+      <tr><td>距半年线</td><td class="val">N/A</td><td>数据不足</td></tr>
+      <tr><td>距年线</td><td class="val">N/A</td><td>数据不足</td></tr>
+      <tr><td>阻力评估</td><td class="val">相对低位</td><td>上下均有空间</td></tr>
+    </table>
+  </div>
+
+  <div class="dim-section">
+    <div class="dim-header">
+      <span class="dim-tag">维度四</span>
+      <span class="dim-name">情绪周期</span>
+    </div>
+    <table class="dim-table">
+      <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+      <tr><td>涨停家数</td><td class="val">0</td><td></td></tr>
+      <tr><td>跌停家数</td><td class="val">0</td><td></td></tr>
+      <tr><td>市场情绪</td><td class="val">中性</td><td>市场平稳</td></tr>
+      <tr><td>沪深300涨跌幅</td><td class="val">0.00%</td><td></td></tr>
+    </table>
+  </div>
+
+  <div class="dim-section">
+    <div class="dim-header">
+      <span class="dim-tag">维度五</span>
+      <span class="dim-name">资金席位</span>
+    </div>
+    <table class="dim-table">
+      <tr><th>指标</th><th>数值</th><th>解读</th></tr>
+      <tr><td>融资余额</td><td class="val">N/A</td><td></td></tr>
+      <tr><td>余额变动</td><td class="val">N/A</td><td>数据待更新</td></tr>
+      <tr><td>大宗交易</td><td class="val">无</td><td></td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- 综合结论 -->
+<div class="card">
+  <div class="section-title">八、综合结论</div>
+  <div class="exec-item">
+    <span class="exec-label">趋势：</span><span class="exec-value">空头排列</span>
+  </div>
+  <div class="exec-item">
+    <span class="exec-label">T+1策略：</span><span class="exec-value">不适合做T+1</span>
+  </div>
+  <div class="exec-item">
+    <span class="exec-label">板块：</span><span class="exec-value">元器件，跟随板块</span>
+  </div>
+  <div class="exec-item">
+    <span class="exec-label">筹码：</span><span class="exec-value">4.6%（极度低位）</span>
+  </div>
+  <div class="exec-item">
+    <span class="exec-label">情绪：</span><span class="exec-value">中性（市场平稳）</span>
+  </div>
+  <div class="exec-item">
+    <span class="exec-label">资金：</span><span class="exec-value">融资数据待更新</span>
+  </div>
+</div>
+
+<!-- 风险提示 -->
+<div class="risk-tip">
+  <div class="risk-text">⚠️ 风险提示：以上为纯数据回测结果，不构成投资建议。实盘操作自负盈亏，请严格止损。</div>
+</div>
+
+<!-- 返回按钮 -->
+<div class="btn-primary">🌾 再查一只</div>
+
+</body>
+</html>

@@ -19,6 +19,17 @@
     <view class="input-hint">支持6位代码或中文名称模糊匹配</view>
   </view>
 
+  <!-- 样本区间选择 -->
+  <view class="card stat-days-wrap">
+    <view class="input-label">样本分析区间</view>
+    <picker mode="selector" range="{{daysOptions}}" range-key="label" bindchange="onDaysChange">
+      <view class="days-picker">
+        <text>{{selectedDays.label}}</text>
+        <text class="picker-arrow">▼</text>
+      </view>
+    </picker>
+  </view>
+
   <!-- 快速选择 -->
   <view class="card quick-select">
     <view class="section-title">快速选择</view>
@@ -31,7 +42,7 @@
   </view>
 
   <!-- 分析按钮 -->
-  <button class="btn-primary" bindtap="onSearch" loading="{{loading}}">
+  <button class="btn-primary" bindtap="onSearch" loading="{{loading}}" style="text-align: center;">
     {{loading ? '分析中...' : '🌾 开始分析'}}
   </button>
 

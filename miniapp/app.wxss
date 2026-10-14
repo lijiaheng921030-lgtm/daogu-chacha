@@ -369,3 +369,196 @@ page {
   color: #666666;
   margin-top: 4rpx;
 }
+
+.stat-days-tag {
+  display: inline-block;
+  margin-top: 8rpx;
+  padding: 4rpx 16rpx;
+  background: rgba(212, 175, 55, 0.15);
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  color: #D4AF37;
+}
+
+.stat-section {
+  margin-bottom: 24rpx;
+}
+
+.stat-section:last-child {
+  margin-bottom: 0;
+}
+
+.stat-title {
+  font-size: 26rpx;
+  color: #B0B0B0;
+  margin-bottom: 12rpx;
+  font-weight: 500;
+}
+
+.stat-table {
+  background: #1A1A1A;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.stat-table-header {
+  display: flex;
+  padding: 14rpx 16rpx;
+  background: #2A2A2A;
+  font-size: 22rpx;
+  color: #666666;
+}
+
+.stat-table-row {
+  display: flex;
+  padding: 14rpx 16rpx;
+  border-top: 1rpx solid #333;
+  font-size: 24rpx;
+  color: #E0E0E0;
+}
+
+.col-label {
+  flex: 1;
+}
+
+.col-label.highlight {
+  color: #D4AF37;
+}
+
+.col-count {
+  width: 80rpx;
+  text-align: center;
+}
+
+.col-avg {
+  width: 120rpx;
+  text-align: right;
+  color: #E0E0E0;
+}
+
+.col-avg.red {
+  color: #E94560;
+}
+
+.cond-list {
+  background: #1A1A1A;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.cond-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 20rpx;
+  border-bottom: 1rpx solid #333;
+}
+
+.cond-item:last-child {
+  border-bottom: none;
+}
+
+.cond-item.best {
+  background: rgba(233, 69, 96, 0.1);
+}
+
+.cond-label {
+  font-size: 24rpx;
+  color: #E0E0E0;
+  flex: 1;
+}
+
+.cond-metrics {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.cond-count {
+  font-size: 22rpx;
+  color: #666666;
+}
+
+.cond-avg {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #E0E0E0;
+}
+
+.cond-avg.red {
+  color: #E94560;
+}
+
+.top10-list {
+  background: #1A1A1A;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.top10-header {
+  display: flex;
+  padding: 14rpx 16rpx;
+  background: #2A2A2A;
+  font-size: 22rpx;
+  color: #666666;
+}
+
+.top10-row {
+  display: flex;
+  padding: 14rpx 16rpx;
+  border-top: 1rpx solid #333;
+  font-size: 24rpx;
+  color: #E0E0E0;
+}
+
+.col-date {
+  width: 140rpx;
+  color: #B0B0B0;
+}
+
+.col-pct {
+  flex: 1;
+}
+
+.col-pct.red {
+  color: #E94560;
+  font-weight: 600;
+}
+
+.col-other {
+  width: 200rpx;
+  text-align: right;
+  color: #666666;
+  font-size: 20rpx;
+}
+
+.risk-tip {
+  font-size: 22rpx;
+  color: #666666;
+  line-height: 1.7;
+}
+
+/* 首页下拉选择器样式 */
+.stat-days-wrap {
+  background: #252525;
+  border-radius: 16rpx;
+  padding: 24rpx 30rpx;
+  margin-bottom: 24rpx;
+}
+
+.days-picker {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #1A1A1A;
+  border: 1rpx solid #3A3A3A;
+  border-radius: 12rpx;
+  padding: 20rpx 24rpx;
+  font-size: 28rpx;
+  color: #FFFFFF;
+}
+
+.picker-arrow {
+  color: #666666;
+  font-size: 20rpx;
+}

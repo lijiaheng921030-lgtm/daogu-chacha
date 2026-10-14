@@ -5,6 +5,18 @@ Page({
     stockInput: '',
     loading: false,
     errorMsg: '',
+    daysOptions: [
+      { label: '120个交易日', value: 120 },
+      { label: '60个交易日', value: 60 },
+      { label: '30个交易日', value: 30 },
+    ],
+    selectedDays: { label: '120个交易日', value: 120 },
+  },
+
+  onDaysChange(e) {
+    const idx = e.detail.value;
+    const option = this.data.daysOptions[idx];
+    this.setData({ selectedDays: option });
   },
 
   onInput(e) {
@@ -30,10 +42,10 @@ Page({
     this.setData({ loading: true, errorMsg: '' });
 
     wx.request({
-      url: `${app.globalData.apiBase}/api/analyze`,
+      url: `${app.globalData.apiBase}/api/statAnalyze`,
       method: 'POST',
       header: { 'Content-Type': 'application/json' },
-      data: { stock_code: keyword },
+      data: { stock_code: keyword, days: this.data.selectedDays.value },
       success: (res) => {
         this.setData({ loading: false });
         if (res.data.code === 0) {
