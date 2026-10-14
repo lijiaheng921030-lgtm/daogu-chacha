@@ -42,7 +42,7 @@
         <view class="stat-title">② 按收盘vs MA5分层</view>
         <view class="stat-table">
           <view class="stat-table-header">
-            <text class="col-label">MA5位置</text>
+            <text class="col-label">5日线位置</text>
             <text class="col-count">次数</text>
             <text class="col-ratio">占比</text>
             <text class="col-avg">均涨幅</text>
@@ -62,7 +62,7 @@
         <view class="stat-title">③ 按收盘vs MA20分层</view>
         <view class="stat-table">
           <view class="stat-table-header">
-            <text class="col-label">MA20位置</text>
+            <text class="col-label">20日线位置</text>
             <text class="col-count">次数</text>
             <text class="col-ratio">占比</text>
             <text class="col-avg">均涨幅</text>

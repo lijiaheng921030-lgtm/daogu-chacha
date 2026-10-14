@@ -160,18 +160,18 @@ app.post('/api/statAnalyze', async (req, res) => {
 
     // 2. MA5分层
     const ma5Stats = markBest(statBy(samples, s => {
-      if (s.vsMa5 > 5) return '远离上方(>5%)';
-      if (s.vsMa5 > 0) return '之上';
-      if (s.vsMa5 > -5) return '之下';
-      return '远离下方(<-5%)';
+      if (s.vsMa5 > 5) return '股价在5日线上方远离';
+      if (s.vsMa5 > 0) return '股价在5日线上方';
+      if (s.vsMa5 > -5) return '股价在5日线下方';
+      return '股价在5日线下方远离';
     }), samples.length);
 
     // 3. MA20分层
     const ma20Stats = markBest(statBy(samples, s => {
-      if (s.vsMa20 > 10) return '远离上方(>10%)';
-      if (s.vsMa20 > 0) return '之上';
-      if (s.vsMa20 > -10) return '之下';
-      return '远离下方(<-10%)';
+      if (s.vsMa20 > 10) return '股价在20日线上方远离';
+      if (s.vsMa20 > 0) return '股价在20日线上方';
+      if (s.vsMa20 > -10) return '股价在20日线下方';
+      return '股价在20日线下方远离';
     }), samples.length);
 
     // 4. 换手率分层
@@ -189,10 +189,10 @@ app.post('/api/statAnalyze', async (req, res) => {
     const condD = samples.filter(s => s.today_pct < -3 && s.vsMa20 < -5);
 
     const condStats = [
-      { label: '前日<-3% + 量比<1 + MA5下方', count: condA.length, sum: condA.length ? condA.reduce((s,x)=>s+x.next_pct,0) : 0 },
-      { label: '前日<-5% + 量比<0.8', count: condB.length, sum: condB.length ? condB.reduce((s,x)=>s+x.next_pct,0) : 0 },
-      { label: '前日<-3% + MA5偏离<-3%', count: condC.length, sum: condC.length ? condC.reduce((s,x)=>s+x.next_pct,0) : 0 },
-      { label: '前日<-3% + MA20偏离<-5%', count: condD.length, sum: condD.length ? condD.reduce((s,x)=>s+x.next_pct,0) : 0 },
+      { label: '前一天跌超3% + 缩量 + 股价在5日线下方', count: condA.length, sum: condA.length ? condA.reduce((s,x)=>s+x.next_pct,0) : 0 },
+      { label: '前一天跌超5% + 极度缩量', count: condB.length, sum: condB.length ? condB.reduce((s,x)=>s+x.next_pct,0) : 0 },
+      { label: '前一天跌超3% + 股价偏离5日线3%以上', count: condC.length, sum: condC.length ? condC.reduce((s,x)=>s+x.next_pct,0) : 0 },
+      { label: '前一天跌超3% + 股价偏离20日线5%以上', count: condD.length, sum: condD.length ? condD.reduce((s,x)=>s+x.next_pct,0) : 0 },
     ].map(x => ({ ...x, avg: x.count ? x.sum / x.count : 0 }));
     const markedCondStats = markBest(condStats, samples.length);
 
@@ -216,12 +216,12 @@ app.post('/api/statAnalyze', async (req, res) => {
     const bestCond = markedCondStats.find(x => x.isBest);
 
     const conclusions = {
-      vol: `最佳量比为${bestVol ? bestVol.label : 'N/A'}，明日均涨幅${bestVol ? bestVol.avg : '0'}%`,
-      ma5: `最佳MA5位置为${bestMa5 ? bestMa5.label : 'N/A'}，明日均涨幅${bestMa5 ? bestMa5.avg : '0'}%`,
-      ma20: `最佳MA20位置为${bestMa20 ? bestMa20.label : 'N/A'}，明日均涨幅${bestMa20 ? bestMa20.avg : '0'}%`,
-      dist: `最佳前日涨跌幅为${bestDist ? bestDist.label : 'N/A'}，明日均涨幅${bestDist ? bestDist.avg : '0'}%`,
-      cond: `最优条件为${bestCond ? bestCond.label : 'N/A'}，明日均涨幅${bestCond ? bestCond.avg : '0'}%`,
-      overall: `该股最佳T+1买入条件为：${bestCond ? bestCond.label + '（' + bestCond.avg + '%）' : 'N/A'}。量比优选${bestVol ? bestVol.label : 'N/A'}，MA位置宜${bestMa5 ? bestMa5.label : 'N/A'}。`
+      vol: `成交量最好的情况：${bestVol ? bestVol.label : 'N/A'}（${bestVol ? bestVol.avg : '0'}%次日平均涨幅）`,
+      ma5: `5日均线最佳位置：${bestMa5 ? bestMa5.label : 'N/A'}（${bestMa5 ? bestMa5.avg : '0'}%次日平均涨幅）`,
+      ma20: `20日均线最佳位置：${bestMa20 ? bestMa20.label : 'N/A'}（${bestMa20 ? bestMa20.avg : '0'}%次日平均涨幅）`,
+      dist: `前日涨跌最佳区间：${bestDist ? bestDist.label : 'N/A'}（${bestDist ? bestDist.avg : '0'}%次日平均涨幅）`,
+      cond: `最优买入条件：${bestCond ? bestCond.label : 'N/A'}（${bestCond ? bestCond.avg : '0'}%次日平均涨幅）`,
+      overall: `综合来看，${bestCond ? bestCond.label : 'N/A'}这种情况下，次日上涨概率和涨幅最可观。配合量能${bestVol ? bestVol.label : ''}、股价在5日线${bestMa5 ? bestMa5.label.replace('股价在5日线', '') : ''}时效果更好。`
     };
 
     // Top10
