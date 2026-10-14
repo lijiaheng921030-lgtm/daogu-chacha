@@ -163,23 +163,28 @@ app.post('/api/statAnalyze', async (req, res) => {
         map[k].green_count++;
         map[k].green_sum += s.next_pct;
       });
+      const total = totalRed + totalGreen;
       return Object.entries(map).map(([k, v]) => ({
         label: v.label,
         red_count: v.red_count,
+        red_ratio: ((v.red_count / total) * 100).toFixed(1),
         red_avg: v.red_count ? (v.red_sum / v.red_count).toFixed(2) : '0.00',
         green_count: v.green_count,
+        green_ratio: ((v.green_count / total) * 100).toFixed(1),
         green_avg: v.green_count ? (v.green_sum / v.green_count).toFixed(2) : '0.00',
       }));
     }
 
-    // 标记最优（红盘均涨幅最高的行）
+    // 标记两个最优：成功率最高（红盘占比）、涨幅最高（红盘均涨）
     function markBestMerged(rows) {
       const valid = rows.filter(x => x.red_count >= 2);
-      if (valid.length === 0) return rows;
+      if (valid.length === 0) return rows.map(x => ({ ...x, isBestRatio: false, isBestAvg: false }));
+      const maxRedRatio = Math.max(...valid.map(x => parseFloat(x.red_ratio)));
       const maxRedAvg = Math.max(...valid.map(x => parseFloat(x.red_avg)));
       return rows.map(x => ({
         ...x,
-        isBest: x.red_count >= 2 && parseFloat(x.red_avg) === maxRedAvg
+        isBestRatio: x.red_count >= 2 && parseFloat(x.red_ratio) === maxRedRatio,
+        isBestAvg: x.red_count >= 2 && parseFloat(x.red_avg) === maxRedAvg,
       }));
     }
 
@@ -252,20 +257,25 @@ app.post('/api/statAnalyze', async (req, res) => {
     ];
     const condStats = markBestMerged(condStatsRaw);
 
-    // 生成结论
-    const bestVol = volStats.find(x => x.isBest);
-    const bestMa5 = ma5Stats.find(x => x.isBest);
-    const bestMa20 = ma20Stats.find(x => x.isBest);
-    const bestDist = distStats.find(x => x.isBest);
-    const bestCond = condStats.find(x => x.isBest);
+    // 每个维度找成功率最高（isBestRatio）和涨幅最高（isBestAvg）
+    const bestVolRatio = volStats.find(x => x.isBestRatio);
+    const bestVolAvg = volStats.find(x => x.isBestAvg);
+    const bestMa5Ratio = ma5Stats.find(x => x.isBestRatio);
+    const bestMa5Avg = ma5Stats.find(x => x.isBestAvg);
+    const bestMa20Ratio = ma20Stats.find(x => x.isBestRatio);
+    const bestMa20Avg = ma20Stats.find(x => x.isBestAvg);
+    const bestDistRatio = distStats.find(x => x.isBestRatio);
+    const bestDistAvg = distStats.find(x => x.isBestAvg);
+    const bestCondRatio = condStats.find(x => x.isBestRatio);
+    const bestCondAvg = condStats.find(x => x.isBestAvg);
 
     const conclusions = {
-      vol: `成交量最好的情况：${bestVol ? bestVol.label : 'N/A'}（红盘均涨${bestVol ? bestVol.red_avg : '0'}%，绿盘均跌${bestVol ? bestVol.green_avg : '0'}%）`,
-      ma5: `5日均线最佳位置：${bestMa5 ? bestMa5.label : 'N/A'}（红盘均涨${bestMa5 ? bestMa5.red_avg : '0'}%，绿盘均跌${bestMa5 ? bestMa5.green_avg : '0'}%）`,
-      ma20: `20日均线最佳位置：${bestMa20 ? bestMa20.label : 'N/A'}（红盘均涨${bestMa20 ? bestMa20.red_avg : '0'}%，绿盘均跌${bestMa20 ? bestMa20.green_avg : '0'}%）`,
-      dist: `前日涨跌最佳区间：${bestDist ? bestDist.label : 'N/A'}（红盘均涨${bestDist ? bestDist.red_avg : '0'}%，绿盘均跌${bestDist ? bestDist.green_avg : '0'}%）`,
-      cond: `最优买入条件：${bestCond ? bestCond.label : 'N/A'}（红盘均涨${bestCond ? bestCond.red_avg : '0'}%，绿盘均跌${bestCond ? bestCond.green_avg : '0'}%）`,
-      overall: `综合来看，${bestCond ? bestCond.label : 'N/A'}时红盘概率和涨幅最好（均涨${bestCond ? bestCond.red_avg : '0'}%）。量能选${bestVol ? bestVol.label : ''}、股价在5日线${bestMa5 ? bestMa5.label.replace('股价在5日线', '') : ''}时胜率更高。`
+      vol: `【成功率最高】${bestVolRatio ? bestVolRatio.label : 'N/A'}（红盘占比${bestVolRatio ? bestVolRatio.red_ratio : '0'}%，${bestVolRatio ? bestVolRatio.red_count : 0}次）；【涨幅最高】${bestVolAvg ? bestVolAvg.label : 'N/A'}（红盘均涨${bestVolAvg ? bestVolAvg.red_avg : '0'}%）`,
+      ma5: `【成功率最高】${bestMa5Ratio ? bestMa5Ratio.label : 'N/A'}（红盘占比${bestMa5Ratio ? bestMa5Ratio.red_ratio : '0'}%，${bestMa5Ratio ? bestMa5Ratio.red_count : 0}次）；【涨幅最高】${bestMa5Avg ? bestMa5Avg.label : 'N/A'}（红盘均涨${bestMa5Avg ? bestMa5Avg.red_avg : '0'}%）`,
+      ma20: `【成功率最高】${bestMa20Ratio ? bestMa20Ratio.label : 'N/A'}（红盘占比${bestMa20Ratio ? bestMa20Ratio.red_ratio : '0'}%，${bestMa20Ratio ? bestMa20Ratio.red_count : 0}次）；【涨幅最高】${bestMa20Avg ? bestMa20Avg.label : 'N/A'}（红盘均涨${bestMa20Avg ? bestMa20Avg.red_avg : '0'}%）`,
+      dist: `【成功率最高】${bestDistRatio ? bestDistRatio.label : 'N/A'}（红盘占比${bestDistRatio ? bestDistRatio.red_ratio : '0'}%，${bestDistRatio ? bestDistRatio.red_count : 0}次）；【涨幅最高】${bestDistAvg ? bestDistAvg.label : 'N/A'}（红盘均涨${bestDistAvg ? bestDistAvg.red_avg : '0'}%）`,
+      cond: `【成功率最高】${bestCondRatio ? bestCondRatio.label : 'N/A'}（红盘占比${bestCondRatio ? bestCondRatio.red_ratio : '0'}%，${bestCondRatio ? bestCondRatio.red_count : 0}次）；【涨幅最高】${bestCondAvg ? bestCondAvg.label : 'N/A'}（红盘均涨${bestCondAvg ? bestCondAvg.red_avg : '0'}%）`,
+      overall: `综合来看，最优买入条件为【${bestCondAvg ? bestCondAvg.label : 'N/A'}】，红盘均涨最高（${bestCondAvg ? bestCondAvg.red_avg : '0'}%）；若追求稳定则关注【${bestCondRatio ? bestCondRatio.label : 'N/A'}】（红盘占比${bestCondRatio ? bestCondRatio.red_ratio : '0'}%）。量能参考【${bestVolAvg ? bestVolAvg.label : ''}】，5日线参考【${bestMa5Avg ? bestMa5Avg.label : ''}】。`
     };
 
     // Top10红盘样本
