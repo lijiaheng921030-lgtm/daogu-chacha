@@ -139,15 +139,15 @@ app.post('/api/statAnalyze', async (req, res) => {
         result[bin].count++;
         result[bin].sum += s.next_pct;
       });
-      return Object.entries(result).map(([k, v]) => ({ label: k, count: v.count, avg: v.count ? (v.sum / v.count) : 0 }));
+      return Object.entries(result).map(([k, v]) => ({ label: k, count: v.count, sum: v.sum, avg: v.count ? (v.sum / v.count) : 0 }));
     }
 
-    // 添加isBest标记 - 找出该分类中avg最高的项
-    function markBest(arr) {
+    // 添加isBest标记和占比 - 找出该分类中avg最高的项
+    function markBest(arr, total) {
       const validItems = arr.filter(x => x.count >= 2);
-      if (validItems.length === 0) return arr;
+      if (validItems.length === 0) return arr.map(x => ({ ...x, isBest: false, ratio: ((x.count / total) * 100).toFixed(1), avg: x.count ? (x.sum / x.count).toFixed(2) : '0.00' }));
       const maxAvg = Math.max(...validItems.map(x => x.avg));
-      return arr.map(x => ({ ...x, isBest: x.avg === maxAvg && x.count >= 2 }));
+      return arr.map(x => ({ ...x, isBest: x.avg === maxAvg && x.count >= 2, ratio: ((x.count / total) * 100).toFixed(1), avg: x.count ? (x.sum / x.count).toFixed(2) : '0.00' }));
     }
 
     // 1. 量比分层
@@ -156,7 +156,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.volRatio < 1.2) return '正常(0.7-1.2)';
       if (s.volRatio < 2.0) return '放量(1.2-2.0)';
       return '巨量(>2.0)';
-    }));
+    }), samples.length);
 
     // 2. MA5分层
     const ma5Stats = markBest(statBy(samples, s => {
@@ -164,7 +164,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.vsMa5 > 0) return '之上';
       if (s.vsMa5 > -5) return '之下';
       return '远离下方(<-5%)';
-    }));
+    }), samples.length);
 
     // 3. MA20分层
     const ma20Stats = markBest(statBy(samples, s => {
@@ -172,7 +172,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.vsMa20 > 0) return '之上';
       if (s.vsMa20 > -10) return '之下';
       return '远离下方(<-10%)';
-    }));
+    }), samples.length);
 
     // 4. 换手率分层
     const turnStats = markBest(statBy(samples, s => {
@@ -180,7 +180,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.turnoverRate <= 3) return '正常(1-3%)';
       if (s.turnoverRate <= 6) return '高换(3-6%)';
       return '巨量换手(>6%)';
-    }));
+    }), samples.length);
 
     // 5. 综合条件
     const condA = samples.filter(s => s.today_pct < -3 && s.volRatio < 1 && s.vsMa5 < 0);
@@ -194,7 +194,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       { label: '前日<-3% + MA5偏离<-3%', count: condC.length, avg: condC.length ? condC.reduce((s,x)=>s+x.next_pct,0)/condC.length : 0 },
       { label: '前日<-3% + MA20偏离<-5%', count: condD.length, avg: condD.length ? condD.reduce((s,x)=>s+x.next_pct,0)/condD.length : 0 },
     ];
-    const markedCondStats = markBest(condStats);
+    const markedCondStats = markBest(condStats, samples.length);
 
     // 6. 前日分布
     const distStats = markBest(statBy(samples, s => {
@@ -206,7 +206,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.today_pct > -3) return '-3~-1%';
       if (s.today_pct > -5) return '-5~-3%';
       return '<-5%';
-    }));
+    }), samples.length);
 
     // 生成结论
     const bestVol = volStats.find(x => x.isBest);
@@ -216,12 +216,12 @@ app.post('/api/statAnalyze', async (req, res) => {
     const bestCond = markedCondStats.find(x => x.isBest);
 
     const conclusions = {
-      vol: `最佳量比为${bestVol ? bestVol.label : 'N/A'}，明日均涨幅${bestVol ? bestVol.avg.toFixed(2) : '0'}%`,
-      ma5: `最佳MA5位置为${bestMa5 ? bestMa5.label : 'N/A'}，明日均涨幅${bestMa5 ? bestMa5.avg.toFixed(2) : '0'}%`,
-      ma20: `最佳MA20位置为${bestMa20 ? bestMa20.label : 'N/A'}，明日均涨幅${bestMa20 ? bestMa20.avg.toFixed(2) : '0'}%`,
-      dist: `最佳前日涨跌幅为${bestDist ? bestDist.label : 'N/A'}，明日均涨幅${bestDist ? bestDist.avg.toFixed(2) : '0'}%`,
-      cond: `最优条件为${bestCond ? bestCond.label : 'N/A'}，明日均涨幅${bestCond ? bestCond.avg.toFixed(2) : '0'}%`,
-      overall: `该股最佳T+1买入条件为：${bestCond ? bestCond.label + '（' + bestCond.avg.toFixed(2) + '%）' : 'N/A'}。量比优选${bestVol ? bestVol.label : 'N/A'}，MA位置宜${bestMa5 ? bestMa5.label : 'N/A'}。`
+      vol: `最佳量比为${bestVol ? bestVol.label : 'N/A'}，明日均涨幅${bestVol ? bestVol.avg : '0'}%`,
+      ma5: `最佳MA5位置为${bestMa5 ? bestMa5.label : 'N/A'}，明日均涨幅${bestMa5 ? bestMa5.avg : '0'}%`,
+      ma20: `最佳MA20位置为${bestMa20 ? bestMa20.label : 'N/A'}，明日均涨幅${bestMa20 ? bestMa20.avg : '0'}%`,
+      dist: `最佳前日涨跌幅为${bestDist ? bestDist.label : 'N/A'}，明日均涨幅${bestDist ? bestDist.avg : '0'}%`,
+      cond: `最优条件为${bestCond ? bestCond.label : 'N/A'}，明日均涨幅${bestCond ? bestCond.avg : '0'}%`,
+      overall: `该股最佳T+1买入条件为：${bestCond ? bestCond.label + '（' + bestCond.avg + '%）' : 'N/A'}。量比优选${bestVol ? bestVol.label : 'N/A'}，MA位置宜${bestMa5 ? bestMa5.label : 'N/A'}。`
     };
 
     // Top10
