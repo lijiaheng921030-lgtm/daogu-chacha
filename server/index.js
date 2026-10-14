@@ -34,136 +34,6 @@ app.get('/api/health', (req, res) => {
   res.json({ code: 0, msg: 'ok', data: { status: 'running', service: '稻谷查查1.0' } });
 });
 
-// 调试搜索接口
-app.get('/api/debug-search', async (req, res) => {
-  const { keyword } = req.query;
-  if (!keyword) return res.json({ code: 400, msg: '缺少keyword参数' });
-  try {
-    const result = await searchStock(keyword);
-    res.json({ code: 0, data: result });
-  } catch (err) {
-    res.json({ code: 500, msg: err.message });
-  }
-});
-
-// 调试完整流程
-app.get('/api/debug-full', async (req, res) => {
-  const { keyword } = req.query;
-  if (!keyword) return res.json({ code: 400, msg: '缺少keyword参数' });
-  try {
-    const searchResult = await searchStock(keyword);
-    if (!searchResult) return res.json({ code: 404, msg: '搜索失败' });
-
-    const today = new Date();
-    const endDate = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-    const startDate = `${today.getFullYear() - 1}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-
-    const klineData = await fetchKline(searchResult.ts_code, startDate, endDate);
-    res.json({
-      code: 0,
-      data: {
-        search: searchResult,
-        ts_code: searchResult.ts_code,
-        startDate,
-        endDate,
-        klineCount: klineData ? klineData.length : 0
-      }
-    });
-  } catch (err) {
-    res.json({ code: 500, msg: err.message });
-  }
-});
-
-// GET版本的statAnalyze调试
-app.post('/api/stat-debug', async (req, res) => {
-  const { stock_code, days = 120 } = req.body || req.query || {};
-  console.error('POST stat-debug received:', JSON.stringify(req.body), 'stock_code:', stock_code);
-  if (!stock_code) return res.json({ code: 400, msg: '缺少stock_code参数' });
-
-  try {
-    let thscode = stock_code;
-    let stockName = stockNameMap[stock_code] || stock_code;
-
-    if (/^\d{6}$/.test(stock_code)) {
-      const szPrefixes = ['000', '002', '300'];
-      thscode = szPrefixes.includes(stock_code.slice(0, 3)) ? `${stock_code}.SZ` : `${stock_code}.SH`;
-    } else if (!stock_code.includes('.')) {
-      const localMap = stockMap[stock_code];
-      console.error('localMap for', stock_code, ':', localMap);
-      if (localMap) {
-        thscode = localMap;
-      } else {
-        console.error('Calling searchStock with:', stock_code);
-        const searchResult = await searchStock(stock_code);
-        console.error('searchResult:', JSON.stringify(searchResult));
-        if (searchResult) {
-          thscode = searchResult.ts_code;
-          stockName = searchResult.name;
-        }
-      }
-    }
-
-    console.error('Final thscode:', thscode);
-    if (!thscode) return res.json({ code: 404, msg: '无法识别股票代码' });
-
-    const today = new Date();
-    const endDate = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-    const startDate = `${today.getFullYear() - 1}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-
-    const klineData = await fetchKline(thscode, startDate, endDate);
-    console.error('POST stat-debug klineData:', klineData ? klineData.length : 'null');
-    if (!klineData || klineData.length === 0) {
-      return res.json({ code: 404, msg: '获取K线数据失败', debug: { thscode, startDate, endDate } });
-    }
-
-    res.json({ code: 0, data: { stock_code: thscode, stock_name: stockName, klineCount: klineData.length } });
-  } catch (err) {
-    console.error('POST stat-debug error:', err.message);
-    res.json({ code: 500, msg: err.message });
-  }
-});
-
-app.get('/api/stat-debug', async (req, res) => {
-  const { stock_code, days = 120 } = req.query;
-  if (!stock_code) return res.json({ code: 400, msg: '缺少stock_code参数' });
-
-  try {
-    let thscode = stock_code;
-    let stockName = stockNameMap[stock_code] || stock_code;
-
-    if (/^\d{6}$/.test(stock_code)) {
-      const szPrefixes = ['000', '002', '300'];
-      thscode = szPrefixes.includes(stock_code.slice(0, 3)) ? `${stock_code}.SZ` : `${stock_code}.SH`;
-    } else if (!stock_code.includes('.')) {
-      const localMap = stockMap[stock_code];
-      if (localMap) {
-        thscode = localMap;
-      } else {
-        const searchResult = await searchStock(stock_code);
-        if (searchResult) {
-          thscode = searchResult.ts_code;
-          stockName = searchResult.name;
-        }
-      }
-    }
-
-    if (!thscode) return res.json({ code: 404, msg: '无法识别股票代码' });
-
-    const today = new Date();
-    const endDate = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-    const startDate = `${today.getFullYear() - 1}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-
-    const klineData = await fetchKline(thscode, startDate, endDate);
-    if (!klineData || klineData.length === 0) {
-      return res.json({ code: 404, msg: '获取K线数据失败', debug: { thscode, startDate, endDate } });
-    }
-
-    res.json({ code: 0, data: { stock_code: thscode, stock_name: stockName, klineCount: klineData.length } });
-  } catch (err) {
-    res.json({ code: 500, msg: err.message });
-  }
-});
-
 // 统计分析接口
 app.post('/api/statAnalyze', async (req, res) => {
   const { stock_code, days = 120 } = req.body;
@@ -202,7 +72,6 @@ app.post('/api/statAnalyze', async (req, res) => {
     const startDate = `${today.getFullYear() - 1}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
 
     const klineData = await fetchKline(thscode, startDate, endDate);
-    console.error('DEBUG statAnalyze fetchKline:', thscode, startDate, 'klineCount:', klineData ? klineData.length : 'null');
     if (!klineData || klineData.length === 0) {
       return res.json({ code: 404, msg: '获取K线数据失败' });
     }
@@ -233,7 +102,7 @@ app.post('/api/statAnalyze', async (req, res) => {
 
     // 估算换手率（成交额/市值）
     const lastClose = closes[closes.length - 1];
-    const floatShares = lastClose * closes.length * 1000; // 粗略估算
+    const floatShares = lastClose * closes.length * 1000;
     const turnoverRate = amounts.map((a, i) => a * 10000 / closes[i] / (floatShares || 1) * 100);
 
     // 取近days个交易日
@@ -333,7 +202,6 @@ app.post('/api/statAnalyze', async (req, res) => {
         stock_name: stockName,
         days: n,
         total_samples: samples.length,
-        // 统计分析
         vol_stats: volStats,
         ma5_stats: ma5Stats,
         ma20_stats: ma20Stats,
@@ -390,7 +258,6 @@ app.post('/api/analyze', async (req, res) => {
       return res.json({ code: 404, msg: '获取K线数据失败，可能停牌或代码错误' });
     }
 
-    // 调用JS版回测（无需Python）
     const report = await analyze(thscode);
     if (report.error) {
       return res.json({ code: 500, msg: report.error });
@@ -431,7 +298,6 @@ async function fetchKline(thscode, startDate, endDate) {
   }
 }
 
-// 搜索股票代码
 async function searchStock(keyword) {
   const payload = {
     api_name: 'stock_basic',
@@ -448,22 +314,12 @@ async function searchStock(keyword) {
     const result = await resp.json();
     if (result.code === 0 && result.data && result.data.items && result.data.items.length > 0) {
       const item = result.data.items[0];
-      return { ts_code: item[0], name: item[2] }; // ts_code, name
+      return { ts_code: item[0], name: item[2] };
     }
   } catch {
     return null;
   }
   return null;
-}
-
-function writeKlineToCSV(data, csvPath) {
-  if (data.length === 0) return;
-  const fields = Object.keys(data[0]);
-  const lines = [fields.join(',')];
-  data.forEach(row => {
-    lines.push(fields.map(f => row[f] ?? '').join(','));
-  });
-  fs.writeFileSync(csvPath, lines.join('\n'), 'utf-8');
 }
 
 app.listen(PORT, () => {
