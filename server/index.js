@@ -69,11 +69,15 @@ app.post('/api/statAnalyze', async (req, res) => {
 
     const today = new Date();
     const endDate = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-    const startDate = `${today.getFullYear() - 1}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-
-    const klineData = await fetchKline(thscode, startDate, endDate);
+    // 尝试最近1年，如果数据不足则逐步扩展到2年、3年
+    let klineData = null;
+    for (const years of [1, 2, 3]) {
+      const startDate = `${today.getFullYear() - years}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+      klineData = await fetchKline(thscode, startDate, endDate);
+      if (klineData && klineData.length > 10) break;
+    }
     if (!klineData || klineData.length === 0) {
-      return res.json({ code: 404, msg: '获取K线数据失败' });
+      return res.json({ code: 404, msg: '获取K线数据失败，可能已停牌或退市' });
     }
 
     // 排序
