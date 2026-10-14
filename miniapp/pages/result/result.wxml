@@ -4,6 +4,8 @@
     <view class="stock-name">{{report.stock_name}}</view>
     <view class="stock-code">{{report.stock_code}}</view>
     <view class="stat-days-tag">近{{report.days}}个交易日 · 红盘{{report.total_red}}次 / 绿盘{{report.total_green}}次</view>
+    <view class="data-range-tag">数据区间：{{report.data_start_date}} ~ {{report.data_end_date}}</view>
+    <view class="stale-warning" wx:if="{{report.data_is_stale}}">⚠️ 数据已停更{{report.data_stale_days}}天（最近交易日：{{report.data_end_date}}），结论仅供参考</view>
   </view>
 
   <!-- 加载中 -->

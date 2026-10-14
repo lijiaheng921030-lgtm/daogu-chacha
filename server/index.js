@@ -80,8 +80,12 @@ app.post('/api/statAnalyze', async (req, res) => {
       return res.json({ code: 404, msg: '获取K线数据失败，可能已停牌或退市' });
     }
 
-    // 排序
+    // 排序（按日期升序）
     klineData.sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+
+    // 记录实际数据的起止日期
+    const actualStartDate = klineData[0].trade_date;
+    const actualEndDate = klineData[klineData.length - 1].trade_date;
 
     // 计算指标
     const closes = klineData.map(d => parseFloat(d.close));
@@ -262,12 +266,23 @@ app.post('/api/statAnalyze', async (req, res) => {
     // Top10红盘样本
     const top10 = [...redSamples].sort((a, b) => b.next_pct - a.next_pct).slice(0, 10);
 
+    // 检查数据是否太老（超过30个自然日无新数据）
+    const lastTradeDate = actualEndDate;
+    const lastTradeTs = new Date(lastTradeDate.slice(0,4), parseInt(lastTradeDate.slice(4,6))-1, lastTradeDate.slice(6,8)).getTime();
+    const todayTs = new Date().getTime();
+    const daysSinceLastTrade = Math.floor((todayTs - lastTradeTs) / 86400000);
+    const dataIsStale = daysSinceLastTrade > 30;
+
     res.json({
       code: 0,
       data: {
         stock_code: thscode,
         stock_name: stockName,
         days: n,
+        data_start_date: `${actualStartDate.slice(0,4)}-${actualStartDate.slice(4,6)}-${actualStartDate.slice(6,8)}`,
+        data_end_date: `${actualEndDate.slice(0,4)}-${actualEndDate.slice(4,6)}-${actualEndDate.slice(6,8)}`,
+        data_is_stale: dataIsStale,
+        data_stale_days: dataIsStale ? daysSinceLastTrade : 0,
         total_red: totalRed,
         total_green: totalGreen,
         vol_stats: volStats,

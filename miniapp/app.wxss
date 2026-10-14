@@ -380,6 +380,26 @@ page {
   color: #D4AF37;
 }
 
+.data-range-tag {
+  display: inline-block;
+  margin-top: 6rpx;
+  padding: 4rpx 16rpx;
+  background: rgba(100, 100, 128, 0.2);
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  color: #888888;
+}
+
+.stale-warning {
+  margin-top: 10rpx;
+  padding: 8rpx 16rpx;
+  background: rgba(233, 69, 96, 0.15);
+  border-radius: 10rpx;
+  font-size: 22rpx;
+  color: #E94560;
+  text-align: center;
+}
+
 .stat-section {
   margin-bottom: 24rpx;
 }
