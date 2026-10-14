@@ -383,12 +383,35 @@ async function fetchKline(thscode, startDate, endDate) {
 }
 
 async function searchStock(keyword) {
+  // 判断是数字代码还是名称
+  if (/^\d{6}$/.test(keyword)) {
+    const szPrefixes = ['000', '002', '300'];
+    const ts_code = szPrefixes.includes(keyword.slice(0, 3)) ? `${keyword}.SZ` : `${keyword}.SH`;
+    // 用 ts_code 精确查询获取公司名称
+    const payload = {
+      api_name: 'stock_basic',
+      token: TUSHARE_TOKEN,
+      params: { ts_code: ts_code, name: '', list_status: 'L' }
+    };
+    try {
+      const resp = await fetch(TUSHARE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await resp.json();
+      if (result.code === 0 && result.data && result.data.items && result.data.items.length > 0) {
+        const item = result.data.items[0];
+        return { ts_code: item[0], name: item[2] };
+      }
+    } catch { /* fall through */ }
+  }
+  // 名称模糊搜索
   const payload = {
     api_name: 'stock_basic',
     token: TUSHARE_TOKEN,
     params: { ts_code: '', name: keyword, list_status: 'L' }
   };
-
   try {
     const resp = await fetch(TUSHARE_URL, {
       method: 'POST',
