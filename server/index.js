@@ -110,94 +110,104 @@ app.post('/api/statAnalyze', async (req, res) => {
     const lastN = klineData.slice(-n);
     const startIdx = klineData.length - n;
 
-    // 次日红盘样本
-    const samples = [];
+    // 同时收集红盘样本和绿盘样本
+    const redSamples = [];
+    const greenSamples = [];
     for (let i = 0; i < lastN.length - 1; i++) {
       const idx = startIdx + i;
-      const next_red = pctChgs[idx + 1] > 0;
-      if (next_red) {
-        samples.push({
-          date: dates[idx],
-          today_pct: pctChgs[idx],
-          volRatio: volRatios[idx],
-          turnoverRate: turnoverRate[idx],
-          vsMa5: ma5[idx] ? (closes[idx] - ma5[idx]) / ma5[idx] * 100 : 0,
-          vsMa10: ma10[idx] ? (closes[idx] - ma10[idx]) / ma10[idx] * 100 : 0,
-          vsMa20: ma20[idx] ? (closes[idx] - ma20[idx]) / ma20[idx] * 100 : 0,
-          vsMa60: ma60[idx] ? (closes[idx] - ma60[idx]) / ma60[idx] * 100 : 0,
-          next_pct: pctChgs[idx + 1]
-        });
-      }
+      const nextPct = pctChgs[idx + 1];
+      const sample = {
+        date: dates[idx],
+        today_pct: pctChgs[idx],
+        volRatio: volRatios[idx],
+        turnoverRate: turnoverRate[idx],
+        vsMa5: ma5[idx] ? (closes[idx] - ma5[idx]) / ma5[idx] * 100 : 0,
+        vsMa10: ma10[idx] ? (closes[idx] - ma10[idx]) / ma10[idx] * 100 : 0,
+        vsMa20: ma20[idx] ? (closes[idx] - ma20[idx]) / ma20[idx] * 100 : 0,
+        vsMa60: ma60[idx] ? (closes[idx] - ma60[idx]) / ma60[idx] * 100 : 0,
+        next_pct: nextPct
+      };
+      if (nextPct > 0) redSamples.push(sample);
+      else if (nextPct < 0) greenSamples.push(sample);
     }
 
-    // 统计函数
-    function statBy(arr, bins) {
-      const result = {};
-      arr.forEach(s => {
-        let bin = bins(s);
-        if (!result[bin]) result[bin] = { count: 0, sum: 0 };
-        result[bin].count++;
-        result[bin].sum += s.next_pct;
+    const totalRed = redSamples.length;
+    const totalGreen = greenSamples.length;
+    const totalAll = totalRed + totalGreen;
+
+    // 合并统计函数：同一label下并排红盘和绿盘
+    function mergeStatBy(redArr, greenArr, bins) {
+      const map = {};
+      redArr.forEach(s => {
+        const k = bins(s);
+        if (!map[k]) map[k] = { label: k, red_count: 0, red_sum: 0, green_count: 0, green_sum: 0 };
+        map[k].red_count++;
+        map[k].red_sum += s.next_pct;
       });
-      return Object.entries(result).map(([k, v]) => ({ label: k, count: v.count, sum: v.sum, avg: v.count ? (v.sum / v.count) : 0 }));
+      greenArr.forEach(s => {
+        const k = bins(s);
+        if (!map[k]) map[k] = { label: k, red_count: 0, red_sum: 0, green_count: 0, green_sum: 0 };
+        map[k].green_count++;
+        map[k].green_sum += s.next_pct;
+      });
+      return Object.entries(map).map(([k, v]) => ({
+        label: v.label,
+        red_count: v.red_count,
+        red_avg: v.red_count ? (v.red_sum / v.red_count).toFixed(2) : '0.00',
+        green_count: v.green_count,
+        green_avg: v.green_count ? (v.green_sum / v.green_count).toFixed(2) : '0.00',
+      }));
     }
 
-    // 添加isBest标记和占比 - 找出该分类中avg最高的项
-    function markBest(arr, total) {
-      const validItems = arr.filter(x => x.count >= 2);
-      if (validItems.length === 0) return arr.map(x => ({ ...x, isBest: false, ratio: ((x.count / total) * 100).toFixed(1), avg: x.count ? (x.sum / x.count).toFixed(2) : '0.00' }));
-      const maxAvg = Math.max(...validItems.map(x => x.avg));
-      return arr.map(x => ({ ...x, isBest: x.avg === maxAvg && x.count >= 2, ratio: ((x.count / total) * 100).toFixed(1), avg: x.count ? (x.sum / x.count).toFixed(2) : '0.00' }));
+    // 标记最优（红盘均涨幅最高的行）
+    function markBestMerged(rows) {
+      const valid = rows.filter(x => x.red_count >= 2);
+      if (valid.length === 0) return rows;
+      const maxRedAvg = Math.max(...valid.map(x => parseFloat(x.red_avg)));
+      return rows.map(x => ({
+        ...x,
+        isBest: x.red_count >= 2 && parseFloat(x.red_avg) === maxRedAvg
+      }));
     }
 
     // 1. 量比分层
-    const volStats = markBest(statBy(samples, s => {
+    const volRows = mergeStatBy(redSamples, greenSamples, s => {
       if (s.volRatio < 0.7) return '缩量(<0.7)';
       if (s.volRatio < 1.2) return '正常(0.7-1.2)';
       if (s.volRatio < 2.0) return '放量(1.2-2.0)';
       return '巨量(>2.0)';
-    }), samples.length);
+    });
+    const volStats = markBestMerged(volRows);
 
     // 2. MA5分层
-    const ma5Stats = markBest(statBy(samples, s => {
+    const ma5Rows = mergeStatBy(redSamples, greenSamples, s => {
       if (s.vsMa5 > 5) return '股价在5日线上方远离';
       if (s.vsMa5 > 0) return '股价在5日线上方';
       if (s.vsMa5 > -5) return '股价在5日线下方';
       return '股价在5日线下方远离';
-    }), samples.length);
+    });
+    const ma5Stats = markBestMerged(ma5Rows);
 
     // 3. MA20分层
-    const ma20Stats = markBest(statBy(samples, s => {
+    const ma20Rows = mergeStatBy(redSamples, greenSamples, s => {
       if (s.vsMa20 > 10) return '股价在20日线上方远离';
       if (s.vsMa20 > 0) return '股价在20日线上方';
       if (s.vsMa20 > -10) return '股价在20日线下方';
       return '股价在20日线下方远离';
-    }), samples.length);
+    });
+    const ma20Stats = markBestMerged(ma20Rows);
 
     // 4. 换手率分层
-    const turnStats = markBest(statBy(samples, s => {
+    const turnRows = mergeStatBy(redSamples, greenSamples, s => {
       if (s.turnoverRate < 1) return '低换(<1%)';
       if (s.turnoverRate <= 3) return '正常(1-3%)';
       if (s.turnoverRate <= 6) return '高换(3-6%)';
       return '巨量换手(>6%)';
-    }), samples.length);
+    });
+    const turnStats = markBestMerged(turnRows);
 
-    // 5. 综合条件
-    const condA = samples.filter(s => s.today_pct < -3 && s.volRatio < 1 && s.vsMa5 < 0);
-    const condB = samples.filter(s => s.today_pct < -5 && s.volRatio < 0.8);
-    const condC = samples.filter(s => s.today_pct < -3 && s.vsMa5 < -3);
-    const condD = samples.filter(s => s.today_pct < -3 && s.vsMa20 < -5);
-
-    const condStats = [
-      { label: '前一天跌超3% + 缩量 + 股价在5日线下方', count: condA.length, sum: condA.length ? condA.reduce((s,x)=>s+x.next_pct,0) : 0 },
-      { label: '前一天跌超5% + 极度缩量', count: condB.length, sum: condB.length ? condB.reduce((s,x)=>s+x.next_pct,0) : 0 },
-      { label: '前一天跌超3% + 股价偏离5日线3%以上', count: condC.length, sum: condC.length ? condC.reduce((s,x)=>s+x.next_pct,0) : 0 },
-      { label: '前一天跌超3% + 股价偏离20日线5%以上', count: condD.length, sum: condD.length ? condD.reduce((s,x)=>s+x.next_pct,0) : 0 },
-    ].map(x => ({ ...x, avg: x.count ? x.sum / x.count : 0 }));
-    const markedCondStats = markBest(condStats, samples.length);
-
-    // 6. 前日分布
-    const distStats = markBest(statBy(samples, s => {
+    // 5. 前日涨跌幅分布
+    const distRows = mergeStatBy(redSamples, greenSamples, s => {
       if (s.today_pct > 5) return '>5%';
       if (s.today_pct > 3) return '3~5%';
       if (s.today_pct > 1) return '1~3%';
@@ -206,26 +216,47 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.today_pct > -3) return '-3~-1%';
       if (s.today_pct > -5) return '-5~-3%';
       return '<-5%';
-    }), samples.length);
+    });
+    const distStats = markBestMerged(distRows);
+
+    // 6. 综合条件
+    function makeCondStat(redArr, greenArr, filterFn, label) {
+      const r = redArr.filter(filterFn);
+      const g = greenArr.filter(filterFn);
+      return {
+        label,
+        red_count: r.length,
+        red_avg: r.length ? (r.reduce((s,x)=>s+x.next_pct,0)/r.length).toFixed(2) : '0.00',
+        green_count: g.length,
+        green_avg: g.length ? (g.reduce((s,x)=>s+x.next_pct,0)/g.length).toFixed(2) : '0.00',
+      };
+    }
+    const condStatsRaw = [
+      makeCondStat(redSamples, greenSamples, s => s.today_pct < -3 && s.volRatio < 1 && s.vsMa5 < 0, '前一天跌超3% + 缩量 + 股价在5日线下方'),
+      makeCondStat(redSamples, greenSamples, s => s.today_pct < -5 && s.volRatio < 0.8, '前一天跌超5% + 极度缩量'),
+      makeCondStat(redSamples, greenSamples, s => s.today_pct < -3 && s.vsMa5 < -3, '前一天跌超3% + 股价偏离5日线3%以上'),
+      makeCondStat(redSamples, greenSamples, s => s.today_pct < -3 && s.vsMa20 < -5, '前一天跌超3% + 股价偏离20日线5%以上'),
+    ];
+    const condStats = markBestMerged(condStatsRaw);
 
     // 生成结论
     const bestVol = volStats.find(x => x.isBest);
     const bestMa5 = ma5Stats.find(x => x.isBest);
     const bestMa20 = ma20Stats.find(x => x.isBest);
     const bestDist = distStats.find(x => x.isBest);
-    const bestCond = markedCondStats.find(x => x.isBest);
+    const bestCond = condStats.find(x => x.isBest);
 
     const conclusions = {
-      vol: `成交量最好的情况：${bestVol ? bestVol.label : 'N/A'}（${bestVol ? bestVol.avg : '0'}%次日平均涨幅）`,
-      ma5: `5日均线最佳位置：${bestMa5 ? bestMa5.label : 'N/A'}（${bestMa5 ? bestMa5.avg : '0'}%次日平均涨幅）`,
-      ma20: `20日均线最佳位置：${bestMa20 ? bestMa20.label : 'N/A'}（${bestMa20 ? bestMa20.avg : '0'}%次日平均涨幅）`,
-      dist: `前日涨跌最佳区间：${bestDist ? bestDist.label : 'N/A'}（${bestDist ? bestDist.avg : '0'}%次日平均涨幅）`,
-      cond: `最优买入条件：${bestCond ? bestCond.label : 'N/A'}（${bestCond ? bestCond.avg : '0'}%次日平均涨幅）`,
-      overall: `综合来看，${bestCond ? bestCond.label : 'N/A'}这种情况下，次日上涨概率和涨幅最可观。配合量能${bestVol ? bestVol.label : ''}、股价在5日线${bestMa5 ? bestMa5.label.replace('股价在5日线', '') : ''}时效果更好。`
+      vol: `成交量最好的情况：${bestVol ? bestVol.label : 'N/A'}（红盘均涨${bestVol ? bestVol.red_avg : '0'}%，绿盘均跌${bestVol ? bestVol.green_avg : '0'}%）`,
+      ma5: `5日均线最佳位置：${bestMa5 ? bestMa5.label : 'N/A'}（红盘均涨${bestMa5 ? bestMa5.red_avg : '0'}%，绿盘均跌${bestMa5 ? bestMa5.green_avg : '0'}%）`,
+      ma20: `20日均线最佳位置：${bestMa20 ? bestMa20.label : 'N/A'}（红盘均涨${bestMa20 ? bestMa20.red_avg : '0'}%，绿盘均跌${bestMa20 ? bestMa20.green_avg : '0'}%）`,
+      dist: `前日涨跌最佳区间：${bestDist ? bestDist.label : 'N/A'}（红盘均涨${bestDist ? bestDist.red_avg : '0'}%，绿盘均跌${bestDist ? bestDist.green_avg : '0'}%）`,
+      cond: `最优买入条件：${bestCond ? bestCond.label : 'N/A'}（红盘均涨${bestCond ? bestCond.red_avg : '0'}%，绿盘均跌${bestCond ? bestCond.green_avg : '0'}%）`,
+      overall: `综合来看，${bestCond ? bestCond.label : 'N/A'}时红盘概率和涨幅最好（均涨${bestCond ? bestCond.red_avg : '0'}%）。量能选${bestVol ? bestVol.label : ''}、股价在5日线${bestMa5 ? bestMa5.label.replace('股价在5日线', '') : ''}时胜率更高。`
     };
 
-    // Top10
-    const top10 = [...samples].sort((a, b) => b.next_pct - a.next_pct).slice(0, 10);
+    // Top10红盘样本
+    const top10 = [...redSamples].sort((a, b) => b.next_pct - a.next_pct).slice(0, 10);
 
     res.json({
       code: 0,
@@ -233,13 +264,14 @@ app.post('/api/statAnalyze', async (req, res) => {
         stock_code: thscode,
         stock_name: stockName,
         days: n,
-        total_samples: samples.length,
+        total_red: totalRed,
+        total_green: totalGreen,
         vol_stats: volStats,
         ma5_stats: ma5Stats,
         ma20_stats: ma20Stats,
         turn_stats: turnStats,
         dist_stats: distStats,
-        cond_stats: markedCondStats,
+        cond_stats: condStats,
         conclusions: conclusions,
         top10: top10.map(s => ({
           date: s.date,

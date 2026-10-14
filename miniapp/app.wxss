@@ -426,19 +426,17 @@ page {
 }
 
 .col-count {
-  width: 80rpx;
+  width: 120rpx;
   text-align: center;
 }
 
-.col-avg {
-  width: 120rpx;
-  text-align: right;
-  color: #E0E0E0;
+.col-label.cond-label {
+  flex: 2;
 }
 
-.col-avg.red {
-  color: #E94560;
-}
+.red { color: #E94560; }
+.green { color: #0F9D58; }
+.bold { font-weight: 700; }
 
 .cond-list {
   background: #1A1A1A;

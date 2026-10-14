@@ -3,7 +3,7 @@
   <view class="stock-info">
     <view class="stock-name">{{report.stock_name}}</view>
     <view class="stock-code">{{report.stock_code}}</view>
-    <view class="stat-days-tag">近{{report.days}}个交易日 · {{report.total_samples}}样本</view>
+    <view class="stat-days-tag">近{{report.days}}个交易日 · 红盘{{report.total_red}}次 / 绿盘{{report.total_green}}次</view>
   </view>
 
   <!-- 加载中 -->
@@ -15,23 +15,31 @@
   <block wx:if="{{report}}">
     <!-- 统计分析 -->
     <view class="card">
-      <view class="section-title">📊 次日红盘前日统计分析</view>
+      <view class="section-title">📊 次日红绿盘前日统计分析</view>
+
+      <!-- 表头说明 -->
+      <view class="stat-section">
+        <view class="stat-table">
+          <view class="stat-table-header">
+            <text class="col-label"></text>
+            <text class="col-count">红盘次数</text>
+            <text class="col-count">红盘均涨</text>
+            <text class="col-count">绿盘次数</text>
+            <text class="col-count">绿盘均跌</text>
+          </view>
+        </view>
+      </view>
 
       <!-- 1. 量比分层 -->
       <view class="stat-section">
         <view class="stat-title">① 按量比分层</view>
         <view class="stat-table">
-          <view class="stat-table-header">
-            <text class="col-label">量比区间</text>
-            <text class="col-count">次数</text>
-            <text class="col-ratio">占比</text>
-            <text class="col-avg">均涨幅</text>
-          </view>
           <view class="stat-table-row" wx:for="{{report.vol_stats}}" wx:key="index">
             <text class="col-label {{item.isBest ? 'highlight' : ''}}">{{item.label}}</text>
-            <text class="col-count {{item.isBest ? 'red' : ''}}">{{item.count}}</text>
-            <text class="col-ratio {{item.isBest ? 'red' : ''}}">{{item.ratio}}%</text>
-            <text class="col-avg {{item.isBest ? 'red bold' : ''}}">{{item.avg}}%</text>
+            <text class="col-count {{item.isBest ? 'red' : ''}}">{{item.red_count}}</text>
+            <text class="col-count {{item.isBest ? 'red bold' : ''}}">{{item.red_avg}}%</text>
+            <text class="col-count green">{{item.green_count}}</text>
+            <text class="col-count green">{{item.green_avg}}%</text>
           </view>
         </view>
         <view class="stat-conclusion">结论：{{report.conclusions.vol}}</view>
@@ -39,19 +47,14 @@
 
       <!-- 2. MA5分层 -->
       <view class="stat-section">
-        <view class="stat-title">② 按收盘vs MA5分层</view>
+        <view class="stat-title">② 按收盘vs 5日线分层</view>
         <view class="stat-table">
-          <view class="stat-table-header">
-            <text class="col-label">5日线位置</text>
-            <text class="col-count">次数</text>
-            <text class="col-ratio">占比</text>
-            <text class="col-avg">均涨幅</text>
-          </view>
           <view class="stat-table-row" wx:for="{{report.ma5_stats}}" wx:key="index">
             <text class="col-label {{item.isBest ? 'highlight' : ''}}">{{item.label}}</text>
-            <text class="col-count {{item.isBest ? 'red' : ''}}">{{item.count}}</text>
-            <text class="col-ratio {{item.isBest ? 'red' : ''}}">{{item.ratio}}%</text>
-            <text class="col-avg {{item.isBest ? 'red bold' : ''}}">{{item.avg}}%</text>
+            <text class="col-count {{item.isBest ? 'red' : ''}}">{{item.red_count}}</text>
+            <text class="col-count {{item.isBest ? 'red bold' : ''}}">{{item.red_avg}}%</text>
+            <text class="col-count green">{{item.green_count}}</text>
+            <text class="col-count green">{{item.green_avg}}%</text>
           </view>
         </view>
         <view class="stat-conclusion">结论：{{report.conclusions.ma5}}</view>
@@ -59,19 +62,14 @@
 
       <!-- 3. MA20分层 -->
       <view class="stat-section">
-        <view class="stat-title">③ 按收盘vs MA20分层</view>
+        <view class="stat-title">③ 按收盘vs 20日线分层</view>
         <view class="stat-table">
-          <view class="stat-table-header">
-            <text class="col-label">20日线位置</text>
-            <text class="col-count">次数</text>
-            <text class="col-ratio">占比</text>
-            <text class="col-avg">均涨幅</text>
-          </view>
           <view class="stat-table-row" wx:for="{{report.ma20_stats}}" wx:key="index">
             <text class="col-label {{item.isBest ? 'highlight' : ''}}">{{item.label}}</text>
-            <text class="col-count {{item.isBest ? 'red' : ''}}">{{item.count}}</text>
-            <text class="col-ratio {{item.isBest ? 'red' : ''}}">{{item.ratio}}%</text>
-            <text class="col-avg {{item.isBest ? 'red bold' : ''}}">{{item.avg}}%</text>
+            <text class="col-count {{item.isBest ? 'red' : ''}}">{{item.red_count}}</text>
+            <text class="col-count {{item.isBest ? 'red bold' : ''}}">{{item.red_avg}}%</text>
+            <text class="col-count green">{{item.green_count}}</text>
+            <text class="col-count green">{{item.green_avg}}%</text>
           </view>
         </view>
         <view class="stat-conclusion">结论：{{report.conclusions.ma20}}</view>
@@ -81,17 +79,12 @@
       <view class="stat-section">
         <view class="stat-title">④ 前日涨跌幅分布</view>
         <view class="stat-table">
-          <view class="stat-table-header">
-            <text class="col-label">前日涨跌</text>
-            <text class="col-count">次数</text>
-            <text class="col-ratio">占比</text>
-            <text class="col-avg">均涨幅</text>
-          </view>
           <view class="stat-table-row" wx:for="{{report.dist_stats}}" wx:key="index">
             <text class="col-label {{item.isBest ? 'highlight' : ''}}">{{item.label}}</text>
-            <text class="col-count {{item.isBest ? 'red' : ''}}">{{item.count}}</text>
-            <text class="col-ratio {{item.isBest ? 'red' : ''}}">{{item.ratio}}%</text>
-            <text class="col-avg {{item.isBest ? 'red bold' : ''}}">{{item.avg}}%</text>
+            <text class="col-count {{item.isBest ? 'red' : ''}}">{{item.red_count}}</text>
+            <text class="col-count {{item.isBest ? 'red bold' : ''}}">{{item.red_avg}}%</text>
+            <text class="col-count green">{{item.green_count}}</text>
+            <text class="col-count green">{{item.green_avg}}%</text>
           </view>
         </view>
         <view class="stat-conclusion">结论：{{report.conclusions.dist}}</view>
@@ -100,14 +93,13 @@
       <!-- 5. 综合条件 -->
       <view class="stat-section">
         <view class="stat-title">⑤ 综合条件分析</view>
-        <view class="cond-list">
-          <view class="cond-item {{item.isBest ? 'best' : ''}}" wx:for="{{report.cond_stats}}" wx:key="index">
-            <text class="cond-label {{item.isBest ? 'highlight' : ''}}">{{item.label}}</text>
-            <view class="cond-metrics">
-              <text class="cond-count">{{item.count}}次</text>
-              <text class="cond-ratio {{item.isBest ? 'red' : ''}}">{{item.ratio}}%</text>
-              <text class="cond-avg {{item.isBest ? 'red bold' : ''}}">{{item.avg}}%</text>
-            </view>
+        <view class="stat-table">
+          <view class="stat-table-row" wx:for="{{report.cond_stats}}" wx:key="index">
+            <text class="col-label cond-label {{item.isBest ? 'highlight' : ''}}">{{item.label}}</text>
+            <text class="col-count {{item.isBest ? 'red' : ''}}">{{item.red_count}}</text>
+            <text class="col-count {{item.isBest ? 'red bold' : ''}}">{{item.red_avg}}%</text>
+            <text class="col-count green">{{item.green_count}}</text>
+            <text class="col-count green">{{item.green_avg}}%</text>
           </view>
         </view>
         <view class="stat-conclusion">结论：{{report.conclusions.cond}}</view>
@@ -122,7 +114,7 @@
 
     <!-- Top10样本 -->
     <view class="card">
-      <view class="section-title">🏆 Top10次日涨幅样本</view>
+      <view class="section-title">🏆 Top10次日红盘样本</view>
       <view class="top10-list">
         <view class="top10-header">
           <text class="col-date">日期</text>
