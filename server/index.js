@@ -34,6 +34,18 @@ app.get('/api/health', (req, res) => {
   res.json({ code: 0, msg: 'ok', data: { status: 'running', service: '稻谷查查1.0' } });
 });
 
+// 调试搜索接口
+app.get('/api/debug-search', async (req, res) => {
+  const { keyword } = req.query;
+  if (!keyword) return res.json({ code: 400, msg: '缺少keyword参数' });
+  try {
+    const result = await searchStock(keyword);
+    res.json({ code: 0, data: result });
+  } catch (err) {
+    res.json({ code: 500, msg: err.message });
+  }
+});
+
 // 统计分析接口
 app.post('/api/statAnalyze', async (req, res) => {
   const { stock_code, days = 120 } = req.body;
