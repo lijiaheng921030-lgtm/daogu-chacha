@@ -241,11 +241,14 @@ app.post('/api/statAnalyze', async (req, res) => {
     function makeCondStat(redArr, greenArr, filterFn, label) {
       const r = redArr.filter(filterFn);
       const g = greenArr.filter(filterFn);
+      const total = totalRed + totalGreen;
       return {
         label,
         red_count: r.length,
+        red_ratio: ((r.length / total) * 100).toFixed(1),
         red_avg: r.length ? (r.reduce((s,x)=>s+x.next_pct,0)/r.length).toFixed(2) : '0.00',
         green_count: g.length,
+        green_ratio: ((g.length / total) * 100).toFixed(1),
         green_avg: g.length ? (g.reduce((s,x)=>s+x.next_pct,0)/g.length).toFixed(2) : '0.00',
       };
     }
