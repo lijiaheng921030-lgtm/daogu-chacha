@@ -46,6 +46,34 @@ app.get('/api/debug-search', async (req, res) => {
   }
 });
 
+// 调试完整流程
+app.get('/api/debug-full', async (req, res) => {
+  const { keyword } = req.query;
+  if (!keyword) return res.json({ code: 400, msg: '缺少keyword参数' });
+  try {
+    const searchResult = await searchStock(keyword);
+    if (!searchResult) return res.json({ code: 404, msg: '搜索失败' });
+
+    const today = new Date();
+    const endDate = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+    const startDate = `${today.getFullYear() - 1}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+
+    const klineData = await fetchKline(searchResult.ts_code, startDate, endDate);
+    res.json({
+      code: 0,
+      data: {
+        search: searchResult,
+        ts_code: searchResult.ts_code,
+        startDate,
+        endDate,
+        klineCount: klineData ? klineData.length : 0
+      }
+    });
+  } catch (err) {
+    res.json({ code: 500, msg: err.message });
+  }
+});
+
 // 统计分析接口
 app.post('/api/statAnalyze', async (req, res) => {
   const { stock_code, days = 120 } = req.body;
