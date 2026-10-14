@@ -192,21 +192,21 @@ app.post('/api/statAnalyze', async (req, res) => {
     });
     const volStats = markBestMerged(volRows);
 
-    // 2. MA5分层
+    // 2. MA5分层（偏离5日线百分比）
     const ma5Rows = mergeStatBy(redSamples, greenSamples, s => {
-      if (s.vsMa5 > 5) return '股价在5日线上方远离';
-      if (s.vsMa5 > 0) return '股价在5日线上方';
-      if (s.vsMa5 > -5) return '股价在5日线下方';
-      return '股价在5日线下方远离';
+      if (s.vsMa5 > 5) return '股价在5日线上方（偏离>5%）';
+      if (s.vsMa5 > 0) return '股价在5日线上方（0~5%）';
+      if (s.vsMa5 > -5) return '股价在5日线下方（0~-5%）';
+      return '股价在5日线下方（偏离<-5%）';
     });
     const ma5Stats = markBestMerged(ma5Rows);
 
-    // 3. MA20分层
+    // 3. MA20分层（偏离20日线百分比）
     const ma20Rows = mergeStatBy(redSamples, greenSamples, s => {
-      if (s.vsMa20 > 10) return '股价在20日线上方远离';
-      if (s.vsMa20 > 0) return '股价在20日线上方';
-      if (s.vsMa20 > -10) return '股价在20日线下方';
-      return '股价在20日线下方远离';
+      if (s.vsMa20 > 10) return '股价在20日线上方（偏离>10%）';
+      if (s.vsMa20 > 0) return '股价在20日线上方（0~10%）';
+      if (s.vsMa20 > -10) return '股价在20日线下方（0~-10%）';
+      return '股价在20日线下方（偏离<-10%）';
     });
     const ma20Stats = markBestMerged(ma20Rows);
 
