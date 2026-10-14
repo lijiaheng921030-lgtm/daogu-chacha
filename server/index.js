@@ -88,10 +88,6 @@ app.post('/api/statAnalyze', async (req, res) => {
     // 排序（按日期升序）
     klineData.sort((a, b) => a.trade_date.localeCompare(b.trade_date));
 
-    // 参与分析的120个交易日的起止日期
-    const analysisStartDate = klineData[klineData.length - n].trade_date;
-    const analysisEndDate = klineData[klineData.length - 1].trade_date;
-
     // 计算指标
     const closes = klineData.map(d => parseFloat(d.close));
     const vols = klineData.map(d => parseFloat(d.vol));
@@ -122,6 +118,10 @@ app.post('/api/statAnalyze', async (req, res) => {
     const n = Math.min(parseInt(days), klineData.length - 1);
     const lastN = klineData.slice(-n);
     const startIdx = klineData.length - n;
+
+    // 参与分析的n个交易日的起止日期
+    const analysisStartDate = klineData[startIdx].trade_date;
+    const analysisEndDate = klineData[klineData.length - 1].trade_date;
 
     // 同时收集红盘样本和绿盘样本
     const redSamples = [];
