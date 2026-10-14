@@ -189,11 +189,11 @@ app.post('/api/statAnalyze', async (req, res) => {
     const condD = samples.filter(s => s.today_pct < -3 && s.vsMa20 < -5);
 
     const condStats = [
-      { label: '前日<-3% + 量比<1 + MA5下方', count: condA.length, avg: condA.length ? condA.reduce((s,x)=>s+x.next_pct,0)/condA.length : 0 },
-      { label: '前日<-5% + 量比<0.8', count: condB.length, avg: condB.length ? condB.reduce((s,x)=>s+x.next_pct,0)/condB.length : 0 },
-      { label: '前日<-3% + MA5偏离<-3%', count: condC.length, avg: condC.length ? condC.reduce((s,x)=>s+x.next_pct,0)/condC.length : 0 },
-      { label: '前日<-3% + MA20偏离<-5%', count: condD.length, avg: condD.length ? condD.reduce((s,x)=>s+x.next_pct,0)/condD.length : 0 },
-    ];
+      { label: '前日<-3% + 量比<1 + MA5下方', count: condA.length, sum: condA.length ? condA.reduce((s,x)=>s+x.next_pct,0) : 0 },
+      { label: '前日<-5% + 量比<0.8', count: condB.length, sum: condB.length ? condB.reduce((s,x)=>s+x.next_pct,0) : 0 },
+      { label: '前日<-3% + MA5偏离<-3%', count: condC.length, sum: condC.length ? condC.reduce((s,x)=>s+x.next_pct,0) : 0 },
+      { label: '前日<-3% + MA20偏离<-5%', count: condD.length, sum: condD.length ? condD.reduce((s,x)=>s+x.next_pct,0) : 0 },
+    ].map(x => ({ ...x, avg: x.count ? x.sum / x.count : 0 }));
     const markedCondStats = markBest(condStats, samples.length);
 
     // 6. 前日分布
