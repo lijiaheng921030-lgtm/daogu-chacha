@@ -48,6 +48,11 @@ app.post('/api/statAnalyze', async (req, res) => {
     if (/^\d{6}$/.test(stock_code)) {
       const szPrefixes = ['000', '002', '300'];
       thscode = szPrefixes.includes(stock_code.slice(0, 3)) ? `${stock_code}.SZ` : `${stock_code}.SH`;
+      // 数字代码也要查公司名称
+      const searchResult = await searchStock(stock_code);
+      if (searchResult) {
+        stockName = searchResult.name;
+      }
     } else if (!stock_code.includes('.')) {
       // 先尝试本地映射
       const localMap = stockMap[stock_code];
