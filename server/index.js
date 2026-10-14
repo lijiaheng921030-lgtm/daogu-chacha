@@ -77,6 +77,7 @@ app.get('/api/debug-full', async (req, res) => {
 // GET版本的statAnalyze调试
 app.post('/api/stat-debug', async (req, res) => {
   const { stock_code, days = 120 } = req.body || req.query || {};
+  console.error('POST stat-debug received:', JSON.stringify(req.body), 'stock_code:', stock_code);
   if (!stock_code) return res.json({ code: 400, msg: '缺少stock_code参数' });
 
   try {
@@ -88,10 +89,13 @@ app.post('/api/stat-debug', async (req, res) => {
       thscode = szPrefixes.includes(stock_code.slice(0, 3)) ? `${stock_code}.SZ` : `${stock_code}.SH`;
     } else if (!stock_code.includes('.')) {
       const localMap = stockMap[stock_code];
+      console.error('localMap for', stock_code, ':', localMap);
       if (localMap) {
         thscode = localMap;
       } else {
+        console.error('Calling searchStock with:', stock_code);
         const searchResult = await searchStock(stock_code);
+        console.error('searchResult:', JSON.stringify(searchResult));
         if (searchResult) {
           thscode = searchResult.ts_code;
           stockName = searchResult.name;
@@ -99,6 +103,7 @@ app.post('/api/stat-debug', async (req, res) => {
       }
     }
 
+    console.error('Final thscode:', thscode);
     if (!thscode) return res.json({ code: 404, msg: '无法识别股票代码' });
 
     const today = new Date();
