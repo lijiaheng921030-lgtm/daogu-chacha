@@ -43,11 +43,24 @@ app.post('/api/statAnalyze', async (req, res) => {
 
   try {
     let thscode = stock_code;
+    let stockName = stockNameMap[stock_code] || stock_code;
+
     if (/^\d{6}$/.test(stock_code)) {
       const szPrefixes = ['000', '002', '300'];
       thscode = szPrefixes.includes(stock_code.slice(0, 3)) ? `${stock_code}.SZ` : `${stock_code}.SH`;
     } else if (!stock_code.includes('.')) {
-      thscode = stockMap[stock_code] || null;
+      // 先尝试本地映射
+      const localMap = stockMap[stock_code];
+      if (localMap) {
+        thscode = localMap;
+      } else {
+        // 本地没有则动态搜索
+        const searchResult = await searchStock(stock_code);
+        if (searchResult) {
+          thscode = searchResult.ts_code;
+          stockName = searchResult.name;
+        }
+      }
     }
 
     if (!thscode) {
@@ -186,7 +199,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       code: 0,
       data: {
         stock_code: thscode,
-        stock_name: stockNameMap[thscode.split('.')[0]] || thscode,
+        stock_name: stockName,
         days: n,
         total_samples: samples.length,
         // 统计分析
@@ -285,6 +298,31 @@ async function fetchKline(thscode, startDate, endDate) {
   } catch {
     return null;
   }
+}
+
+// 搜索股票代码
+async function searchStock(keyword) {
+  const payload = {
+    api_name: 'stock_basic',
+    token: TUSHARE_TOKEN,
+    params: { ts_code: '', name: keyword, list_status: 'L' }
+  };
+
+  try {
+    const resp = await fetch(TUSHARE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const result = await resp.json();
+    if (result.code === 0 && result.data && result.data.items && result.data.items.length > 0) {
+      const item = result.data.items[0];
+      return { ts_code: item[0], name: item[2] }; // ts_code, name
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function writeKlineToCSV(data, csvPath) {
