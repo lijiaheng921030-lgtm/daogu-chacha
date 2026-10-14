@@ -562,3 +562,33 @@ page {
   color: #666666;
   font-size: 20rpx;
 }
+
+.stat-conclusion {
+  margin-top: 12rpx;
+  padding: 12rpx 16rpx;
+  background: rgba(212, 175, 55, 0.1);
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  color: #D4AF37;
+}
+
+.overall-conclusion {
+  margin-top: 20rpx;
+  padding: 20rpx;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(212, 175, 55, 0.05));
+  border: 2rpx solid #D4AF37;
+  border-radius: 12rpx;
+}
+
+.overall-title {
+  font-size: 28rpx;
+  color: #D4AF37;
+  font-weight: 700;
+  margin-bottom: 12rpx;
+}
+
+.overall-text {
+  font-size: 26rpx;
+  color: #E0E0E0;
+  line-height: 1.6;
+}
