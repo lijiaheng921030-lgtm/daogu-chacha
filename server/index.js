@@ -74,6 +74,48 @@ app.get('/api/debug-full', async (req, res) => {
   }
 });
 
+// GET版本的statAnalyze调试
+app.get('/api/stat-debug', async (req, res) => {
+  const { stock_code, days = 120 } = req.query;
+  if (!stock_code) return res.json({ code: 400, msg: '缺少stock_code参数' });
+
+  try {
+    let thscode = stock_code;
+    let stockName = stockNameMap[stock_code] || stock_code;
+
+    if (/^\d{6}$/.test(stock_code)) {
+      const szPrefixes = ['000', '002', '300'];
+      thscode = szPrefixes.includes(stock_code.slice(0, 3)) ? `${stock_code}.SZ` : `${stock_code}.SH`;
+    } else if (!stock_code.includes('.')) {
+      const localMap = stockMap[stock_code];
+      if (localMap) {
+        thscode = localMap;
+      } else {
+        const searchResult = await searchStock(stock_code);
+        if (searchResult) {
+          thscode = searchResult.ts_code;
+          stockName = searchResult.name;
+        }
+      }
+    }
+
+    if (!thscode) return res.json({ code: 404, msg: '无法识别股票代码' });
+
+    const today = new Date();
+    const endDate = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+    const startDate = `${today.getFullYear() - 1}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+
+    const klineData = await fetchKline(thscode, startDate, endDate);
+    if (!klineData || klineData.length === 0) {
+      return res.json({ code: 404, msg: '获取K线数据失败', debug: { thscode, startDate, endDate } });
+    }
+
+    res.json({ code: 0, data: { stock_code: thscode, stock_name: stockName, klineCount: klineData.length } });
+  } catch (err) {
+    res.json({ code: 500, msg: err.message });
+  }
+});
+
 // 统计分析接口
 app.post('/api/statAnalyze', async (req, res) => {
   const { stock_code, days = 120 } = req.body;
