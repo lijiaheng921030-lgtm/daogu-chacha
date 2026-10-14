@@ -112,6 +112,7 @@ app.post('/api/statAnalyze', async (req, res) => {
     const startDate = `${today.getFullYear() - 1}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
 
     const klineData = await fetchKline(thscode, startDate, endDate);
+    console.error('DEBUG statAnalyze fetchKline:', thscode, startDate, 'klineCount:', klineData ? klineData.length : 'null');
     if (!klineData || klineData.length === 0) {
       return res.json({ code: 404, msg: '获取K线数据失败' });
     }
