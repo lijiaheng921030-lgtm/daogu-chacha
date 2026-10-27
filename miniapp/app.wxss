@@ -460,7 +460,7 @@ page {
 }
 
 .col-count {
-  width: 70rpx;
+  width: 60rpx;
   text-align: center;
 }
 
@@ -469,13 +469,19 @@ page {
   text-align: center;
 }
 
+.col-rate {
+  width: 80rpx;
+  text-align: center;
+}
+
 .col-avg {
-  width: 90rpx;
+  width: 80rpx;
   text-align: center;
 }
 
 .col-label.cond-label {
   flex: 2;
+  min-width: 200rpx;
 }
 
 .red { color: #E94560; }
