@@ -425,10 +425,17 @@ page {
   border-radius: 8rpx;
 }
 
+/* 统计表横向滚动容器：8 列在 750rpx 屏幕放不下，标签列需要最小宽度 */
+.table-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
 .stat-table {
   background: #1A1A1A;
   border-radius: 12rpx;
   overflow: hidden;
+  min-width: 720rpx;
 }
 
 .stat-table-header {
@@ -449,6 +456,9 @@ page {
 
 .col-label {
   flex: 1;
+  min-width: 220rpx;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .col-label.highlight-ratio {
@@ -481,7 +491,7 @@ page {
 
 .col-label.cond-label {
   flex: 2;
-  min-width: 200rpx;
+  min-width: 280rpx;
 }
 
 .red { color: #E94560; }
@@ -590,12 +600,13 @@ page {
 }
 
 .col-date {
-  width: 140rpx;
+  width: 130rpx;
   color: #B0B0B0;
 }
 
 .col-pct {
   flex: 1;
+  min-width: 130rpx;
 }
 
 .col-pct.red {
@@ -604,14 +615,14 @@ page {
 }
 
 .col-other {
-  width: 200rpx;
+  width: 180rpx;
   text-align: right;
   color: #666666;
   font-size: 20rpx;
 }
 
 .col-other2 {
-  width: 170rpx;
+  width: 150rpx;
   text-align: right;
   color: #8A7A3A;
   font-size: 20rpx;

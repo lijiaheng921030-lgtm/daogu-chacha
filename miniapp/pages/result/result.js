@@ -3,6 +3,16 @@ Page({
     report: null,
     stock_name: '',
     stock_code: '',
+    // 统计表有 8 列，屏幕放不下，横向滚动；表头和所有数据表共用同一个 scrollLeft 保证列对齐
+    tblScroll: 0,
+  },
+
+  onTblScroll(e) {
+    const x = e.detail.scrollLeft;
+    // 只在变化足够大时回写，避免 setData → scroll-left → scroll 事件的回环
+    if (Math.abs(x - this.data.tblScroll) > 1) {
+      this.setData({ tblScroll: x });
+    }
   },
 
   onLoad(options) {

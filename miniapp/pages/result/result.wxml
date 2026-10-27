@@ -19,10 +19,11 @@
     <view class="card">
       <view class="section-title">📊 次日红绿盘前日统计分析</view>
       <view class="stat-note">说明：Tushare 未开通分钟级数据权限，拿不到真正的分时走势图。本报告用「当日均价线（VWAP）+ 日内K线形态 + 集合竞价」这三个可得的盘口/分时数据来刻画当天走势，⑥⑦⑧ 就是这三项。</view>
-      <view class="stat-note">口径：「红占比」＝该层红盘次数占全部样本的比例；「红成功率」＝该层内红盘次数÷该层总次数，才是真正的成功率先看「红成功率」，「红占比」只说明这种形态出现得多不多。样本少于5次的层不参与「最高」评选。</view>
+      <view class="stat-note">口径：「红占比」＝该层红盘次数占全部样本的比例；「红成功率」＝该层内红盘次数÷该层总次数，才是真正的成功率先看「红成功率」，「红占比」只说明这种形态出现得多不多。样本少于5次的层不参与「最高」评选。表格可左右滑动查看完整列。</view>
 
-      <!-- 表头 -->
+      <!-- 表头（与下方表格横向滚动同步） -->
       <view class="stat-section">
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
         <view class="stat-table">
           <view class="stat-table-header">
             <text class="col-label"></text>
@@ -35,11 +36,13 @@
             <text class="col-avg">绿均跌</text>
           </view>
         </view>
+        </scroll-view>
       </view>
 
       <!-- 1. 量比分层 -->
       <view class="stat-section">
         <view class="stat-title">① 按量比分层</view>
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
         <view class="stat-table">
           <view class="stat-table-row" wx:for="{{report.vol_stats}}" wx:key="index">
             <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
@@ -52,12 +55,14 @@
             <text class="col-avg green">{{item.green_avg}}%</text>
           </view>
         </view>
+        </scroll-view>
         <view class="stat-conclusion">结论：{{report.conclusions.vol}}</view>
       </view>
 
       <!-- 2. MA5分层 -->
       <view class="stat-section">
         <view class="stat-title">② 按收盘vs 5日线分层</view>
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
         <view class="stat-table">
           <view class="stat-table-row" wx:for="{{report.ma5_stats}}" wx:key="index">
             <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
@@ -70,12 +75,14 @@
             <text class="col-avg green">{{item.green_avg}}%</text>
           </view>
         </view>
+        </scroll-view>
         <view class="stat-conclusion">结论：{{report.conclusions.ma5}}</view>
       </view>
 
       <!-- 3. MA20分层 -->
       <view class="stat-section">
         <view class="stat-title">③ 按收盘vs 20日线分层</view>
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
         <view class="stat-table">
           <view class="stat-table-row" wx:for="{{report.ma20_stats}}" wx:key="index">
             <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
@@ -88,12 +95,14 @@
             <text class="col-avg green">{{item.green_avg}}%</text>
           </view>
         </view>
+        </scroll-view>
         <view class="stat-conclusion">结论：{{report.conclusions.ma20}}</view>
       </view>
 
       <!-- 4. 前日涨跌幅分布 -->
       <view class="stat-section">
         <view class="stat-title">④ 前日涨跌幅分布</view>
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
         <view class="stat-table">
           <view class="stat-table-row" wx:for="{{report.dist_stats}}" wx:key="index">
             <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
@@ -106,6 +115,7 @@
             <text class="col-avg green">{{item.green_avg}}%</text>
           </view>
         </view>
+        </scroll-view>
         <view class="stat-conclusion">结论：{{report.conclusions.dist}}</view>
       </view>
 
@@ -113,6 +123,7 @@
       <view class="stat-section">
         <view class="stat-title">⑤ 综合条件分析</view>
         <view class="stat-note">把前面几个条件组合起来看哪一类形态次日更容易红。✅ 跨股票验证后最稳的两条：「收盘价跌破当日均价线 + 缩量 + 股价在5日线下方」红盘率 56.2%（比基准高 8.7 个百分点，p=0.0015，10 只股票里 9 只方向一致）；「收盘价跌破当日均价线 + 缩量」红盘率 55.5%（高 7.9 个百分点，p=0.0016）。下面每一行都是在这只股票自己的历史里统计的，样本少时会标注 n 值，请结合 n 一起看。</view>
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
         <view class="stat-table">
           <view class="stat-table-row" wx:for="{{report.cond_stats}}" wx:key="index">
             <text class="col-label cond-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
@@ -125,6 +136,7 @@
             <text class="col-avg green">{{item.green_avg}}%</text>
           </view>
         </view>
+        </scroll-view>
         <view class="stat-conclusion">结论：{{report.conclusions.cond}}</view>
       </view>
 
@@ -132,6 +144,7 @@
       <view class="stat-section">
         <view class="stat-title">⑥ 分时走势：收盘价 vs 当日均价线</view>
         <view class="stat-note">当日均价线 = 当天所有成交的平均成本（分时图上那条黄线）。收盘价在均价线下方，说明当天买盘没能把价格顶上去，属于尾盘偏弱。✅ 本项已用 10 只股票、3335 个样本验证过：「收盘价低于当日均价线0.5%以上」次日红盘率 51.8%（比基准高 4.2 个百分点，10 只股票里 10 只方向一致）。</view>
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
         <view class="stat-table">
           <view class="stat-table-row" wx:for="{{report.vwap_stats}}" wx:key="index">
             <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
@@ -144,6 +157,7 @@
             <text class="col-avg green">{{item.green_avg}}%</text>
           </view>
         </view>
+        </scroll-view>
         <view class="stat-conclusion">结论：{{report.conclusions.vwap}}</view>
       </view>
 
@@ -151,6 +165,7 @@
       <view class="stat-section">
         <view class="stat-title">⑦ 分时走势：日内K线形态</view>
         <view class="stat-note">看当天价格走的形态：收盘价落在当天最高价和最低价之间的什么位置，以及有没有长下影线（盘中砸下去又被拉回来）。✅ 已验证：「长下影线&gt;2%」是负向信号——次日红盘率只有 40.1%，比基准低 7.4 个百分点；再叠加「股价在5日线下方」时只有 37.8%（低 9.7 个百分点，验证过的6只股票方向全部一致）。而单看「收盘位置高低」本身没有稳定预测力，所以这里以长下影线为首要分层。</view>
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
         <view class="stat-table">
           <view class="stat-table-row" wx:for="{{report.shape_stats}}" wx:key="index">
             <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
@@ -163,6 +178,7 @@
             <text class="col-avg green">{{item.green_avg}}%</text>
           </view>
         </view>
+        </scroll-view>
         <view class="stat-conclusion">结论：{{report.conclusions.shape}}</view>
       </view>
 
@@ -170,6 +186,7 @@
       <view class="stat-section">
         <view class="stat-title">⑧ 分时走势：开盘集合竞价</view>
         <view class="stat-note">开盘前集合竞价的成交量，和最近5天「竞价」平均量比（同为「股」为单位，口径已校正）。⚠️ 本项在 10 只股票、3335 个样本上验证后<b>未通过显著性检验</b>：竞价放量（&gt;1.2倍）红盘率 51.3%，竞价常量 45.8%，竞价缩量 46.1%，差异都在噪声范围内，各股方向也不一致。<b>因此集合竞价的量能不宜单独作为买卖依据</b>，本表仅供了解当天早盘资金态度。</view>
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
         <view class="stat-table">
           <view class="stat-table-row" wx:for="{{report.auc_stats}}" wx:key="index">
             <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
@@ -182,6 +199,7 @@
             <text class="col-avg green">{{item.green_avg}}%</text>
           </view>
         </view>
+        </scroll-view>
         <view class="stat-conclusion">结论：{{report.conclusions.auc}}</view>
       </view>
 
