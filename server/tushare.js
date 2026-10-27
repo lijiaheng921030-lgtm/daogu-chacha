@@ -14,6 +14,16 @@ function isTransient(code, msg) {
   if (code === 429) return true;
   if (code === 500 && /ip超限|gzip|多个ip/i.test(msg || '')) return true;
   if (code === 502 || code === 503 || code === 504) return true;
+  // 代理可能把限流换成 403 + "ip超限" 之类的措辞，按文本再兜一层
+  if ((code === 403 || code === 429) && /ip超限|gzip|多个ip|限流|频繁/i.test(msg || '')) return true;
+  return false;
+}
+
+// 权限/令牌类错误：重试没有意义，必须立刻返回，让上层给出准确提示
+function isAuthError(code, msg) {
+  if (code === 2002) return true;                       // token 不对 / 过期
+  if (code === 403 && /权限|管理员/.test(msg || '')) return true;
+  if (code === 50101) return true;                      // 接口名不存在（多为权限未开通）
   return false;
 }
 
@@ -23,19 +33,36 @@ function isTransient(code, msg) {
 async function tushareCall(apiName, params, opts = {}) {
   const maxRetry = opts.maxRetry ?? 4;
   const baseDelay = opts.baseDelay ?? 1200;
+  const timeoutMs = opts.timeoutMs ?? 15000;
+  // 整个调用的总预算（含退避），避免一次失败把用户请求拖到小程序 60 秒超时之后
+  const totalBudgetMs = opts.totalBudgetMs ?? 40000;
+  const startedAt = Date.now();
   let lastErr = null;
 
   for (let attempt = 0; attempt <= maxRetry; attempt++) {
+    if (Date.now() - startedAt > totalBudgetMs) {
+      lastErr = { code: lastErr?.code ?? -1, msg: '重试超时' };
+      break;
+    }
     try {
-      const resp = await fetch(TUSHARE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // 代理要求客户端声明支持 gzip
-          'Accept-Encoding': 'gzip, deflate',
-        },
-        body: JSON.stringify({ api_name: apiName, token: TUSHARE_TOKEN, params }),
-      });
+      // 单次请求超时控制：代理 accept 后不响应时不能让请求一直挂着
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let resp;
+      try {
+        resp = await fetch(TUSHARE_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // 代理要求客户端声明支持 gzip
+            'Accept-Encoding': 'gzip, deflate',
+          },
+          body: JSON.stringify({ api_name: apiName, token: TUSHARE_TOKEN, params }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
       const text = await resp.text();
       const result = JSON.parse(text);
 
@@ -49,18 +76,24 @@ async function tushareCall(apiName, params, opts = {}) {
         return { ok: true, code: 0, msg: '', rows, fields };
       }
 
+      // 权限/令牌问题 → 不重试
+      if (isAuthError(result.code, result.msg)) {
+        return { ok: false, code: result.code, msg: result.msg || '', rows: [], fields: [] };
+      }
       // 接口本身不存在（如 50101）→ 不重试
       if (!isTransient(result.code, result.msg)) {
         return { ok: false, code: result.code, msg: result.msg || '', rows: [], fields: [] };
       }
       lastErr = { code: result.code, msg: result.msg || '' };
     } catch (e) {
+      // 超时/网络中断属于瞬时故障，可重试
       lastErr = { code: -1, msg: e.message };
     }
 
     if (attempt < maxRetry) {
-      // 指数退避 + 抖动
-      const delay = baseDelay * Math.pow(2, attempt) + Math.floor(Math.random() * 400);
+      // 指数退避 + 抖动（受总预算约束）
+      const delay = Math.min(baseDelay * Math.pow(2, attempt), 4000) + Math.floor(Math.random() * 400);
+      if (Date.now() - startedAt + delay > totalBudgetMs) break;
       await sleep(delay);
     }
   }
@@ -70,11 +103,11 @@ async function tushareCall(apiName, params, opts = {}) {
 }
 
 /**
- * 取日K。失败时自动放宽时间范围重试（新股/停牌股数据不足）。
+ * 取日K。返回 {ok, rows, code, msg}，让上层能区分"停牌"和"token失效/无权限"。
  */
 async function fetchKline(thscode, startDate, endDate) {
   const r = await tushareCall('daily', { ts_code: thscode, start_date: startDate, end_date: endDate });
-  return r.ok ? r.rows : null;
+  return { ok: r.ok, rows: r.ok ? r.rows : [], code: r.code, msg: r.msg };
 }
 
 /** 取每日基本面指标（真实换手率 / 量比 / 市值） */

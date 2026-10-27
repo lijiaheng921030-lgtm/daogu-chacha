@@ -1,0 +1,12 @@
+# 构建镜像时排除这些内容
+# node_modules 必须在容器里 npm install，否则会用到本地/仓库里的旧版本依赖
+server/node_modules
+node_modules
+miniapp
+_research
+.git
+.github
+*.log
+*.out
+*.csv
+preview.html

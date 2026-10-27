@@ -50,8 +50,21 @@ Page({
         this.setData({ loading: false });
         if (res.data.code === 0) {
           this.saveHistory(res.data.data);
+          // 报告可能十几 KB，URL query 上限约 1024 字符，装不下。
+          // 存本地缓存，只把短 key 传给结果页。
+          const reportKey = `report_${Date.now()}`;
+          try {
+            wx.setStorageSync(reportKey, res.data.data);
+          } catch (e) {
+            console.error('缓存报告失败', e);
+            this.setData({ loading: false, errorMsg: '报告缓存失败，请重试' });
+            return;
+          }
           wx.navigateTo({
-            url: `/pages/result/result?data=${encodeURIComponent(JSON.stringify(res.data.data))}`
+            url: `/pages/result/result?key=${reportKey}`,
+            fail: (err) => {
+              this.setData({ loading: false, errorMsg: '打开结果页失败：' + (err.errMsg || '') });
+            }
           });
         } else {
           this.setData({ errorMsg: res.data.msg || '查询失败，请检查股票代码' });
@@ -69,8 +82,10 @@ Page({
       const history = wx.getStorageSync(app.globalData.historyKey) || [];
       const entry = {
         stock_name: report.stock_name || this.data.stockInput,
-        verdict: report.verdict,
-        verdict_text: report.verdict_text,
+        stock_code: report.stock_code || '',
+        // statAnalyze 的报告没有 A/B/C 裁决字段，用一句话结论当徽章文案
+        verdict: 'C',
+        verdict_text: report.headline || '分析完成',
         date: new Date().toLocaleDateString('zh-CN'),
         ts: Date.now(),
       };

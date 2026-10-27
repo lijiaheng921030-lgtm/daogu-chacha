@@ -4,7 +4,7 @@ const { analyze } = require('./backtest.js');
 const path = require('path');
 const fs = require('fs');
 const {
-  fetchKline, fetchDailyBasic, fetchAuction, fetchMoneyflow, byDate, searchStock,
+  fetchKline, fetchDailyBasic, fetchAuction, byDate, searchStock,
 } = require('./tushare.js');
 
 const app = express();
@@ -36,10 +36,13 @@ app.get('/api/health', (req, res) => {
 
 // 统计分析接口
 app.post('/api/statAnalyze', async (req, res) => {
-  const { stock_code, days = 120 } = req.body;
+  const { stock_code } = req.body;
+  let days = parseInt(req.body.days, 10);
   if (!stock_code) {
     return res.json({ code: 400, msg: '缺少stock_code参数' });
   }
+  if (!isFinite(days) || days < 10) days = 120;          // days 非法时回退到默认，避免 NaN 触发 500
+  days = Math.min(days, 500);
 
   try {
     let thscode = stock_code;
@@ -79,29 +82,45 @@ app.post('/api/statAnalyze', async (req, res) => {
     const today = new Date();
     const endDate = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
     // 尝试最近1年，如果数据不足则逐步扩展到2年、3年
-    let klineData = null;
+    let klineRows = null;
+    let klineErr = null;
     let basicData = [];
     let auctionData = [];
-    let moneyflowData = [];
     for (const years of [1, 2, 3]) {
-      const startDate = `${today.getFullYear() - years}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-      klineData = await fetchKline(thscode, startDate, endDate);
-      if (klineData && klineData.length > 10) {
+      // 用 Date 构造起始日，避免 2月29日 落到非闰年产生非法日期串
+      const sd = new Date(today.getFullYear() - years, today.getMonth(), today.getDate());
+      const startDate = `${sd.getFullYear()}${String(sd.getMonth()+1).padStart(2,'0')}${String(sd.getDate()).padStart(2,'0')}`;
+      const kr = await fetchKline(thscode, startDate, endDate);
+      klineErr = { code: kr.code, msg: kr.msg };
+      if (kr.ok && kr.rows.length > 10) {
+        klineRows = kr.rows;
         // 分时走势所需的辅助数据（失败不阻断主流程）
         basicData = await fetchDailyBasic(thscode, startDate, endDate);
         auctionData = await fetchAuction(thscode, startDate, endDate);
-        moneyflowData = await fetchMoneyflow(thscode, startDate, endDate);
         break;
       }
     }
-    if (!klineData || klineData.length === 0) {
-      return res.json({ code: 404, msg: '获取K线数据失败，可能已停牌或退市，或数据源暂时限流，请稍后重试' });
+    if (!klineRows || klineRows.length === 0) {
+      // 区分「真的没有数据」和「上游报错」——把 token 失效说成"停牌"会把排查方向带偏
+      const ec = klineErr && klineErr.code;
+      if (ec === 2002) {
+        return res.json({ code: 502, msg: '数据源令牌已失效或无访问权限，请联系管理员更新 Tushare Token' });
+      }
+      if (ec === 403) {
+        return res.json({ code: 502, msg: '当前账号没有该接口的访问权限，请联系管理员开通' });
+      }
+      if (ec === 50101) {
+        return res.json({ code: 502, msg: '数据源接口未开通或不可用，请联系管理员' });
+      }
+      return res.json({ code: 404, msg: `获取K线数据失败（可能是新股/次新股数据不足、已停牌退市，或数据源暂时限流，请稍后重试）${klineErr && klineErr.msg ? '｜上游提示：' + klineErr.msg : ''}` });
     }
+    const klineData = klineRows;
 
     // 按日期索引辅助数据（停牌/节假日会导致日期不匹配，用日期对齐而非下标对齐）
     const basicMap = byDate(basicData);
     const auctionMap = byDate(auctionData);
-    const moneyflowMap = byDate(moneyflowData);
+    // 资金流向目前未参与任何统计，保留占位以备后续接入（不再每轮都去代理取数，避免加剧限流）
+    const moneyflowMap = {};
 
     // 排序（按日期升序）
     klineData.sort((a, b) => a.trade_date.localeCompare(b.trade_date));
@@ -127,13 +146,20 @@ app.post('/api/statAnalyze', async (req, res) => {
     const vMa5 = ma(vols, 5);
     const volRatios = vols.map((v, i) => vMa5[i] ? v / vMa5[i] : 1);
 
-    // 估算换手率（成交额/市值）
-    const lastClose = closes[closes.length - 1];
-    const floatShares = lastClose * closes.length * 1000;
-    const turnoverRate = amounts.map((a, i) => a * 10000 / closes[i] / (floatShares || 1) * 100);
+    // 换手率：只信 daily_basic.turnover_rate（真实值）。
+    // 早期用「成交额/估算流通股本」硬凑，那个估算误差可达数十倍，会污染分层与结论，
+    // 因此这里不再伪造，取不到就留 null（显示为「换手率数据缺失」）。
+    const turnoverRate = closes.map(() => null);
 
     // 取近days个交易日
-    const n = Math.min(parseInt(days), klineData.length - 1);
+    const n = Math.min(days, klineData.length - 1);
+    // 样本太少时，任何"成功率100%"都是噪声，必须拦下来而不是照样出结论
+    if (n < 20) {
+      return res.json({
+        code: 404,
+        msg: `该股票可用交易日不足（仅 ${n} 天，可能为次新股），无法做统计，请稍后再试`
+      });
+    }
     const lastN = klineData.slice(-n);
     const startIdx = klineData.length - n;
 
@@ -150,31 +176,51 @@ app.post('/api/statAnalyze', async (req, res) => {
       const row = klineData[idx];
 
       // ---- 分时走势相关指标 ----
+      // num() 把任何非有限数（NaN / Infinity）统一成 null，避免脏数据静默混进统计层
+      const num = v => {
+        const x = parseFloat(v);
+        return (isFinite(x) && !isNaN(x)) ? x : null;
+      };
       // 1) 当日均价线（VWAP）：Tushare amount 单位为千元，vol 单位为手
       //    均价 = amount*1000 / (vol*100) = amount*10 / vol
-      const amt = parseFloat(row.amount);
-      const volHands = parseFloat(row.vol);
-      const vwap = (amt && volHands && volHands > 0) ? (amt * 10 / volHands) : null;
-      const close = closes[idx];
+      const amt = num(row.amount);
+      const volHands = num(row.vol);
+      const vwap = (amt != null && volHands != null && volHands > 0) ? (amt * 10 / volHands) : null;
+      const close = num(row.close);
       // 收盘价相对当日均价线的偏离（%）：负数 = 收盘价在均价线下方（尾盘偏弱）
-      const vwapDiff = vwap ? (close - vwap) / vwap * 100 : null;
+      const vwapDiff = (vwap != null && close != null) ? (close - vwap) / vwap * 100 : null;
 
       // 2) 收盘价在当日最高/最低价区间中的位置（%）：低 = 收盘在当日低位
-      const high = parseFloat(row.high);
-      const low = parseFloat(row.low);
-      const closePos = (high > low) ? (close - low) / (high - low) * 100 : null;
+      //    一字板（high==low）单独标出，不当作「数据缺失」
+      const high = num(row.high);
+      const low = num(row.low);
+      const open = num(row.open);
+      let closePos = null, onePriceLimit = false;
+      if (high != null && low != null && close != null) {
+        if (high > low) {
+          closePos = (close - low) / (high - low) * 100;
+        } else if (high === low) {
+          onePriceLimit = true;   // 全天无波动（一字板）
+          closePos = 100;
+        }
+      }
 
       // 3) 下影线占最低价比例（%）：长下影 = 盘中大幅杀跌后被拉回
-      const lowShadow = (low && low > 0) ? (Math.min(close, parseFloat(row.open)) - low) / low * 100 : null;
+      let lowShadow = null;
+      if (low != null && low > 0 && close != null && open != null) {
+        lowShadow = (Math.min(close, open) - low) / low * 100;
+      }
 
       // 4) 集合竞价（真实盘口数据）
       const auc = auctionMap[row.trade_date];
       let aucRatio = null, aucGap = null;
       if (auc) {
-        // 竞价量 / 前5日平均成交量
+        // 【单位】stk_auction.vol 单位是「股」，daily.vol 单位是「手」，两者不可相除。
+        // 正确口径：今日竞价量 / 前5日【竞价】平均量（同源同单位）。
         let sum5 = 0, c5 = 0;
         for (let j = Math.max(0, idx - 5); j < idx; j++) {
-          sum5 += parseFloat(klineData[j].vol); c5++;
+          const prevAuc = auctionMap[klineData[j].trade_date];
+          if (prevAuc && prevAuc.vol != null) { sum5 += parseFloat(prevAuc.vol); c5++; }
         }
         const avg5 = c5 ? sum5 / c5 : 0;
         if (avg5 > 0 && auc.vol != null) aucRatio = parseFloat(auc.vol) / avg5;
@@ -202,6 +248,7 @@ app.post('/api/statAnalyze', async (req, res) => {
         vwapDiff: vwapDiff,
         closePos: closePos,
         lowShadow: lowShadow,
+        onePriceLimit: onePriceLimit,
         aucRatio: aucRatio,
         aucGap: aucGap,
         next_pct: nextPct
@@ -250,22 +297,31 @@ app.post('/api/statAnalyze', async (req, res) => {
       return rows.filter(r => r.sample_count >= minCount);
     }
 
-    // 标记两个最优：成功率最高（红盘占比）、涨幅最高（红盘均涨）
+    // 标记两个最优：成功率最高（层内红盘率）、涨幅最高（红盘均涨）
+    // 规则：
+    //  - 「数据缺失」类分层永远不参与评选（缺数据不是交易信号）
+    //  - 参与评选的层至少要有 5 个红盘样本，否则 3~4 个样本也能"夺冠"，会误导用户
+    //  - 用容差比较避免浮点全等导致并列层漏标
     function markBestMerged(rows) {
-      const valid = rows.filter(x => x.red_count >= 2);
-      if (valid.length === 0) return rows.map(x => ({ ...x, isBestRatio: false, isBestAvg: false }));
+      const isMissing = x => /缺失/.test(x.label);
+      const eligible = rows.filter(x => !isMissing(x) && x.red_count >= 5 && x.sample_count >= 10);
+      if (eligible.length === 0) return rows.map(x => ({ ...x, isBestRatio: false, isBestAvg: false }));
       // "成功率" = 该层内红盘次数 / 该层总次数（不是占全样本的比例）
       const layerRate = x => {
         const c = x.red_count + x.green_count;
         return c > 0 ? x.red_count / c : 0;
       };
-      const maxRedRatio = Math.max(...valid.map(layerRate));
-      const maxRedAvg = Math.max(...valid.map(x => parseFloat(x.red_avg)));
-      return rows.map(x => ({
-        ...x,
-        isBestRatio: x.red_count >= 2 && layerRate(x) === maxRedRatio,
-        isBestAvg: x.red_count >= 2 && parseFloat(x.red_avg) === maxRedAvg,
-      }));
+      const maxRate = Math.max(...eligible.map(layerRate));
+      const maxAvg = Math.max(...eligible.map(x => parseFloat(x.red_avg)));
+      const EPS = 1e-9;
+      return rows.map(x => {
+        const ok = !isMissing(x) && x.red_count >= 5 && x.sample_count >= 10;
+        return {
+          ...x,
+          isBestRatio: ok && Math.abs(layerRate(x) - maxRate) < EPS,
+          isBestAvg: ok && Math.abs(parseFloat(x.red_avg) - maxAvg) < 1e-9,
+        };
+      });
     }
 
     // 1. 量比分层
@@ -295,8 +351,9 @@ app.post('/api/statAnalyze', async (req, res) => {
     });
     const ma20Stats = markBestMerged(dropSparse(ma20Rows));
 
-    // 4. 换手率分层
+    // 4. 换手率分层（依赖 daily_basic，取不到就整层缺失，不伪造）
     const turnRows = mergeStatBy(redSamples, greenSamples, s => {
+      if (s.turnoverRate == null || !isFinite(s.turnoverRate)) return '换手率数据缺失';
       if (s.turnoverRate < 1) return '低换(<1%)';
       if (s.turnoverRate <= 3) return '正常(1-3%)';
       if (s.turnoverRate <= 6) return '高换(3-6%)';
@@ -331,23 +388,26 @@ app.post('/api/statAnalyze', async (req, res) => {
     });
     const vwapStats = markBestMerged(dropSparse(vwapRows));
 
-    // 7. 日内K线形态（收盘位置 + 下影线）
+    // 7. 日内K线形态（下影线 + 收盘位置）
+    // 先按「有没有长下影线」分流，再看收盘位置——这样每个标签含义唯一，层与层之间可比。
     const shapeRows = mergeStatBy(redSamples, greenSamples, s => {
+      if (s.onePriceLimit) return '一字板（当天无波动）';
       if (s.closePos == null) return '日内高低点数据缺失';
       const longLower = s.lowShadow != null && s.lowShadow > 2;
       if (longLower) return '盘中杀跌后拉回（长下影线>2%）';
-      if (s.closePos > 70) return '收盘在当日高位（>70%）';
-      if (s.closePos < 30) return '收盘在当日低位（<30%）';
-      return '收盘在当日中部（30~70%）';
+      if (s.closePos > 70) return '无长下影·收盘在当日高位（>70%）';
+      if (s.closePos < 30) return '无长下影·收盘在当日低位（<30%）';
+      return '无长下影·收盘在当日中部（30~70%）';
     });
     const shapeStats = markBestMerged(dropSparse(shapeRows));
 
     // 8. 集合竞价强弱（真实盘口数据）
+    // 口径：今日竞价量 / 前5日【竞价】平均量（同源同单位，stk_auction.vol 单位=股）
     const aucRows = mergeStatBy(redSamples, greenSamples, s => {
       if (s.aucRatio == null) return '集合竞价数据缺失';
-      if (s.aucRatio > 0.5) return '竞价放量（>近5日均量0.5倍）';
-      if (s.aucRatio > 0.1) return '竞价常量（0.1~0.5倍）';
-      return '竞价极度缩量（<近5日均量0.1倍）';
+      if (s.aucRatio > 1.2) return '竞价放量（>近5日竞价均量1.2倍）';
+      if (s.aucRatio > 0.5) return '竞价常量（0.5~1.2倍）';
+      return '竞价缩量（<近5日竞价均量0.5倍）';
     });
     const aucStats = markBestMerged(dropSparse(aucRows));
 
@@ -416,16 +476,35 @@ app.post('/api/statAnalyze', async (req, res) => {
       return c > 0 ? (x.red_count / c * 100).toFixed(1) : '0.0';
     };
 
+    // 结论文案：没有达标层时给出可解释的兜底，而不是空白/N/A
+    const pick = (rows, flag) => rows.find(x => x[flag]);
+    const noWinner = (rows) => {
+      const usable = rows.filter(x => !/缺失/.test(x.label));
+      if (!usable.length) return '该维度数据缺失，无法给出结论';
+      const maxN = Math.max(...usable.map(x => x.sample_count));
+      return `样本不足（各层最多 ${maxN} 次，低于 10 次的统计意义有限），暂不给出结论`;
+    };
+    const conclusionText = (rows, dimName) => {
+      const r = pick(rows, 'isBestRatio'), a = pick(rows, 'isBestAvg');
+      const ratioPart = r
+        ? `【成功率最高】${r.label}（层内红盘率${layerRate(r)}%，${r.red_count}次）`
+        : `【成功率最高】${noWinner(rows)}`;
+      const avgPart = a
+        ? `【涨幅最高】${a.label}（红盘均涨${a.red_avg}%）`
+        : `【涨幅最高】${noWinner(rows)}`;
+      return `${ratioPart}；${avgPart}`;
+    };
+
     const conclusions = {
-      vol: `【成功率最高】${bestVolRatio ? bestVolRatio.label : 'N/A'}（层内红盘率${bestVolRatio ? layerRate(bestVolRatio) : '0'}%，${bestVolRatio ? bestVolRatio.red_count : 0}次）；【涨幅最高】${bestVolAvg ? bestVolAvg.label : 'N/A'}（红盘均涨${bestVolAvg ? bestVolAvg.red_avg : '0'}%）`,
-      ma5: `【成功率最高】${bestMa5Ratio ? bestMa5Ratio.label : 'N/A'}（层内红盘率${bestMa5Ratio ? layerRate(bestMa5Ratio) : '0'}%，${bestMa5Ratio ? bestMa5Ratio.red_count : 0}次）；【涨幅最高】${bestMa5Avg ? bestMa5Avg.label : 'N/A'}（红盘均涨${bestMa5Avg ? bestMa5Avg.red_avg : '0'}%）`,
-      ma20: `【成功率最高】${bestMa20Ratio ? bestMa20Ratio.label : 'N/A'}（层内红盘率${bestMa20Ratio ? layerRate(bestMa20Ratio) : '0'}%，${bestMa20Ratio ? bestMa20Ratio.red_count : 0}次）；【涨幅最高】${bestMa20Avg ? bestMa20Avg.label : 'N/A'}（红盘均涨${bestMa20Avg ? bestMa20Avg.red_avg : '0'}%）`,
-      dist: `【成功率最高】${bestDistRatio ? bestDistRatio.label : 'N/A'}（层内红盘率${bestDistRatio ? layerRate(bestDistRatio) : '0'}%，${bestDistRatio ? bestDistRatio.red_count : 0}次）；【涨幅最高】${bestDistAvg ? bestDistAvg.label : 'N/A'}（红盘均涨${bestDistAvg ? bestDistAvg.red_avg : '0'}%）`,
-      vwap: `【成功率最高】${bestVwapRatio ? bestVwapRatio.label : 'N/A'}（层内红盘率${bestVwapRatio ? layerRate(bestVwapRatio) : '0'}%，${bestVwapRatio ? bestVwapRatio.red_count : 0}次）；【涨幅最高】${bestVwapAvg ? bestVwapAvg.label : 'N/A'}（红盘均涨${bestVwapAvg ? bestVwapAvg.red_avg : '0'}%）`,
-      shape: `【成功率最高】${bestShapeRatio ? bestShapeRatio.label : 'N/A'}（层内红盘率${bestShapeRatio ? layerRate(bestShapeRatio) : '0'}%，${bestShapeRatio ? bestShapeRatio.red_count : 0}次）；【涨幅最高】${bestShapeAvg ? bestShapeAvg.label : 'N/A'}（红盘均涨${bestShapeAvg ? bestShapeAvg.red_avg : '0'}%）`,
-      auc: `【成功率最高】${bestAucRatio ? bestAucRatio.label : 'N/A'}（层内红盘率${bestAucRatio ? layerRate(bestAucRatio) : '0'}%，${bestAucRatio ? bestAucRatio.red_count : 0}次）；【涨幅最高】${bestAucAvg ? bestAucAvg.label : 'N/A'}（红盘均涨${bestAucAvg ? bestAucAvg.red_avg : '0'}%）`,
-      cond: `【成功率最高】${bestCondRatio ? bestCondRatio.label : 'N/A'}（层内红盘率${bestCondRatio ? layerRate(bestCondRatio) : '0'}%，${bestCondRatio ? bestCondRatio.red_count : 0}次）；【涨幅最高】${bestCondAvg ? bestCondAvg.label : 'N/A'}（红盘均涨${bestCondAvg ? bestCondAvg.red_avg : '0'}%）`,
-      overall: `综合来看，最优买入条件为【${bestCondAvg ? bestCondAvg.label : 'N/A'}】，红盘均涨最高（${bestCondAvg ? bestCondAvg.red_avg : '0'}%）；若追求稳定则关注【${bestCondRatio ? bestCondRatio.label : 'N/A'}】（层内红盘率${bestCondRatio ? layerRate(bestCondRatio) : '0'}%）。分时走势方面，收盘价与当日均价线的位置参考【${bestVwapRatio ? bestVwapRatio.label : ''}】，日内形态参考【${bestShapeRatio ? bestShapeRatio.label : ''}】；量能参考【${bestVolAvg ? bestVolAvg.label : ''}】，5日线参考【${bestMa5Avg ? bestMa5Avg.label : ''}】。`
+      vol: conclusionText(volStats),
+      ma5: conclusionText(ma5Stats),
+      ma20: conclusionText(ma20Stats),
+      dist: conclusionText(distStats),
+      vwap: conclusionText(vwapStats),
+      shape: conclusionText(shapeStats),
+      auc: conclusionText(aucStats),
+      cond: conclusionText(condStats),
+      overall: `综合来看，最优买入条件为【${bestCondAvg ? bestCondAvg.label : '暂无'}】，红盘均涨最高（${bestCondAvg ? bestCondAvg.red_avg : '0'}%）；若追求稳定则关注【${bestCondRatio ? bestCondRatio.label : '暂无'}】（层内红盘率${bestCondRatio ? layerRate(bestCondRatio) : '0'}%）。分时走势方面，收盘价与当日均价线的位置参考【${bestVwapRatio ? bestVwapRatio.label : '暂无'}】，日内形态参考【${bestShapeRatio ? bestShapeRatio.label : '暂无'}】；量能参考【${bestVolAvg ? bestVolAvg.label : '暂无'}】，5日线参考【${bestMa5Avg ? bestMa5Avg.label : '暂无'}】。`
     };
 
     // Top10红盘样本
@@ -438,12 +517,20 @@ app.post('/api/statAnalyze', async (req, res) => {
     const daysSinceLastTrade = Math.floor((todayTs - lastTradeTs) / 86400000);
     const dataIsStale = daysSinceLastTrade > 30;
 
+    // 一句话结论（供历史记录徽章等场景显示）
+    const headline = bestCondRatio
+      ? `成功率最高：${bestCondRatio.label}（${layerRate(bestCondRatio)}%）`
+      : (bestCondAvg
+        ? `涨幅最高：${bestCondAvg.label}`
+        : `条件样本偏少（各层最多 ${Math.max(0, ...condStats.map(x => x.sample_count))} 次），仅供参考`);
+
     res.json({
       code: 0,
       data: {
         stock_code: thscode,
         stock_name: stockName,
         days: n,
+        headline: headline,
         data_start_date: `${analysisStartDate.slice(0,4)}-${analysisStartDate.slice(4,6)}-${analysisStartDate.slice(6,8)}`,
         data_end_date: `${analysisEndDate.slice(0,4)}-${analysisEndDate.slice(4,6)}-${analysisEndDate.slice(6,8)}`,
         data_is_stale: dataIsStale,
@@ -467,7 +554,7 @@ app.post('/api/statAnalyze', async (req, res) => {
           vol_ratio: s.volRatio.toFixed(2),
           vs_ma5: s.vsMa5.toFixed(1),
           vs_ma20: s.vsMa20.toFixed(1),
-          turnover: s.turnoverRate.toFixed(1),
+          turnover: s.turnoverRate == null || !isFinite(s.turnoverRate) ? '—' : s.turnoverRate.toFixed(1),
           vwap_diff: s.vwapDiff == null ? '—' : s.vwapDiff.toFixed(2),
           close_pos: s.closePos == null ? '—' : s.closePos.toFixed(0),
         }))
@@ -506,9 +593,12 @@ app.post('/api/analyze', async (req, res) => {
     const today = new Date();
     const endDate = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
 
-    const klineData = await fetchKline(thscode, '20250101', endDate);
-    if (!klineData || klineData.length === 0) {
-      return res.json({ code: 404, msg: '获取K线数据失败，可能停牌或代码错误' });
+    const kr = await fetchKline(thscode, '20250101', endDate);
+    if (!kr.ok || kr.rows.length === 0) {
+      const ec = kr.code;
+      if (ec === 2002) return res.json({ code: 502, msg: '数据源令牌已失效或无访问权限，请联系管理员更新 Tushare Token' });
+      if (ec === 403) return res.json({ code: 502, msg: '当前账号没有该接口的访问权限，请联系管理员开通' });
+      return res.json({ code: 404, msg: `获取K线数据失败（可能停牌或代码错误，或数据源暂时限流）${kr.msg ? '｜上游提示：' + kr.msg : ''}` });
     }
 
     const report = await analyze(thscode);

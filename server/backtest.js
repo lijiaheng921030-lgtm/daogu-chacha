@@ -1,13 +1,14 @@
 /**
  * 稻谷查查1.0 - T+1回测 + 归因计算（纯JS版）
  */
-const TUSHARE_TOKEN = '408d073d81acebc8bc76faa303be7de7d0067343625bc2fcc9869aea';
-const TUSHARE_URL = 'https://t.xiaodefa.top/';
+// 统一从环境变量取，与 tushare.js 保持同一配置源
+const TUSHARE_TOKEN = process.env.TUSHARE_TOKEN || '408d073d81acebc8bc76faa303be7de7d0067343625bc2fcc9869aea';
+const TUSHARE_URL = process.env.TUSHARE_URL || 'https://t.xiaodefa.top/';
 
 async function callApi(apiName, params) {
   const resp = await fetch(TUSHARE_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Accept-Encoding': 'gzip, deflate' },
     body: JSON.stringify({ api_name: apiName, token: TUSHARE_TOKEN, params })
   });
   const j = await resp.json();

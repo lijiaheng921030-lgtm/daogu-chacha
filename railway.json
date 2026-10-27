@@ -6,6 +6,12 @@
     "context": "."
   },
   "deploy": {
-    "numReplicas": 1
+    "numReplicas": 1,
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 60,
+    "restartPolicy": {
+      "type": "ON_FAILURE",
+      "maxRetries": 3
+    }
   }
 }
