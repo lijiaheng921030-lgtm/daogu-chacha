@@ -415,6 +415,16 @@ page {
   font-weight: 500;
 }
 
+.stat-note {
+  font-size: 22rpx;
+  color: #777777;
+  line-height: 1.6;
+  margin-bottom: 12rpx;
+  padding: 10rpx 14rpx;
+  background: rgba(100, 100, 128, 0.12);
+  border-radius: 8rpx;
+}
+
 .stat-table {
   background: #1A1A1A;
   border-radius: 12rpx;
@@ -591,6 +601,13 @@ page {
   width: 200rpx;
   text-align: right;
   color: #666666;
+  font-size: 20rpx;
+}
+
+.col-other2 {
+  width: 170rpx;
+  text-align: right;
+  color: #8A7A3A;
   font-size: 20rpx;
 }
 

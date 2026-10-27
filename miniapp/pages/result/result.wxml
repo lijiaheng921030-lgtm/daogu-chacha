@@ -18,6 +18,7 @@
     <!-- 统计分析 -->
     <view class="card">
       <view class="section-title">📊 次日红绿盘前日统计分析</view>
+      <view class="stat-note">说明：Tushare 未开通分钟级数据权限，拿不到真正的分时走势图。本报告用「当日均价线（VWAP）+ 日内K线形态 + 集合竞价」这三个可得的盘口/分时数据来刻画当天走势，⑥⑦⑧ 就是这三项。</view>
 
       <!-- 表头 -->
       <view class="stat-section">
@@ -119,6 +120,60 @@
         <view class="stat-conclusion">结论：{{report.conclusions.cond}}</view>
       </view>
 
+      <!-- 6. 分时走势：收盘价 vs 当日均价线 -->
+      <view class="stat-section">
+        <view class="stat-title">⑥ 分时走势：收盘价 vs 当日均价线</view>
+        <view class="stat-note">当日均价线 = 当天所有成交的平均成本（分时图上那条黄线）。收盘价在均价线下方，说明当天买盘没能把价格顶上去，属于尾盘偏弱。</view>
+        <view class="stat-table">
+          <view class="stat-table-row" wx:for="{{report.vwap_stats}}" wx:key="index">
+            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
+            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
+            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
+            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
+            <text class="col-count green">{{item.green_count}}</text>
+            <text class="col-ratio green">{{item.green_ratio}}%</text>
+            <text class="col-avg green">{{item.green_avg}}%</text>
+          </view>
+        </view>
+        <view class="stat-conclusion">结论：{{report.conclusions.vwap}}</view>
+      </view>
+
+      <!-- 7. 分时走势：日内K线形态 -->
+      <view class="stat-section">
+        <view class="stat-title">⑦ 分时走势：日内K线形态</view>
+        <view class="stat-note">看当天价格走的形态：收盘价落在当天最高价和最低价之间的什么位置，以及有没有长下影线（盘中砸下去又被拉回来）。</view>
+        <view class="stat-table">
+          <view class="stat-table-row" wx:for="{{report.shape_stats}}" wx:key="index">
+            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
+            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
+            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
+            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
+            <text class="col-count green">{{item.green_count}}</text>
+            <text class="col-ratio green">{{item.green_ratio}}%</text>
+            <text class="col-avg green">{{item.green_avg}}%</text>
+          </view>
+        </view>
+        <view class="stat-conclusion">结论：{{report.conclusions.shape}}</view>
+      </view>
+
+      <!-- 8. 分时走势：开盘集合竞价 -->
+      <view class="stat-section">
+        <view class="stat-title">⑧ 分时走势：开盘集合竞价</view>
+        <view class="stat-note">开盘前集合竞价的成交量，和最近5天平均成交量比。竞价就放大量，说明当天早盘资金态度积极。</view>
+        <view class="stat-table">
+          <view class="stat-table-row" wx:for="{{report.auc_stats}}" wx:key="index">
+            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}</text>
+            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
+            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
+            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
+            <text class="col-count green">{{item.green_count}}</text>
+            <text class="col-ratio green">{{item.green_ratio}}%</text>
+            <text class="col-avg green">{{item.green_avg}}%</text>
+          </view>
+        </view>
+        <view class="stat-conclusion">结论：{{report.conclusions.auc}}</view>
+      </view>
+
       <!-- 图例说明 -->
       <view class="legend-row">
         <view class="legend-item"><view class="legend-dot ratio-dot"></view><text>红盘成功率最高</text></view>
@@ -140,11 +195,13 @@
           <text class="col-date">日期</text>
           <text class="col-pct">今日→明日</text>
           <text class="col-other">量比/MA5/换手</text>
+          <text class="col-other2">均价线/收盘位</text>
         </view>
         <view class="top10-row" wx:for="{{report.top10}}" wx:key="index">
           <text class="col-date">{{item.date}}</text>
           <text class="col-pct red">{{item.today_pct}}%→{{item.next_pct}}%</text>
           <text class="col-other">{{item.vol_ratio}}/{{item.vs_ma5}}%/{{item.turnover}}%</text>
+          <text class="col-other2">{{item.vwap_diff}}%/{{item.close_pos}}%</text>
         </view>
       </view>
     </view>

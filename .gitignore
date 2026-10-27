@@ -1,3 +1,5 @@
-.wrangler/
 node_modules/
+_research/
 *.log
+temp_kline.csv
+.wrangler/
