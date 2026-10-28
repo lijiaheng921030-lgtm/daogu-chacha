@@ -78,6 +78,20 @@ const CROSS_VALIDATED_RATE = {
 
   // 换手率分层未做跨股票验证（口径不可跨股票比较），不参与评选
   turn: {},
+
+  // ⑩ 日内形态（BaoStock 真实 5 分钟线分出来的 7 种日内走势）
+  //   数据：10 只股票 × 3395 个样本（20250603~20261026），形态判定见 server/fenshi.js
+  //   S1 早盘冲高回落  层内红盘率 52.78%，比基准高 7.10 个百分点（p=0.0007，7/10 只股票方向一致）
+  //   S2 早盘探底后回升 层内红盘率 42.17%，比基准低 6.24 个百分点（p=0.0039，7/10 只股票方向为负）
+  //   S5 均价线上翘    层内红盘率 41.76%，比基准低 6.47 个百分点（p=0.0055，8/10 只股票方向为负）
+  //   S7 横盘整理      层内红盘率 50.68%，比基准高 4.22 个百分点（p=0.0628，8/10 只方向一致，但没过 0.05，只算边缘）
+  //   S3/S4/S6 样本内红盘率与基准无显著差异，未通过验证
+  fenshi: {
+    'S1 早盘冲高回落': { dir: 'pos', p: 0.0007, z: 3.385, stocks: 7 },
+    'S2 早盘探底后回升': { dir: 'neg', p: 0.0039, z: -2.888, stocks: 7 },
+    'S5 均价线上翘（重心上移）': { dir: 'neg', p: 0.0055, z: -2.774, stocks: 8 },
+    'S7 横盘整理（均价线走平）': { dir: 'pos', p: 0.0628, z: 1.861, stocks: 8, marginal: true },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -118,12 +132,20 @@ const CROSS_VALIDATED_AVG = {
     '盘中杀跌后拉回（下影线>1.5%，次日偏弱）': { stocks: 8, redAvg: 3.20 },
   },
   turn: {},
+
+  // 日内形态维度【没有】通过验证的涨幅层 —— 这是个真实结论，不是漏做：
+  // 各形态的「红盘日均涨」都落在 1.89%~2.72% 之间，和全样本基准 2.07% 差不多，
+  // 逐股方向一致性只有 2/10~6/10（远不到 7/10）。
+  // 也就是说：日内形态能改变「赢不赢」的概率，但改变不了「赢的时候赚多少」。
+  fenshi: {},
 };
 
 // 某维度下允许参与「成功率最高」评选的正向层标签
+// 注意：marginal（p 在 0.05~0.10）的一律不算，哪怕方向是正向 ——
+// 检验没过 0.05 线的层不能拿「成功率最高」。
 function rateEligibleLabels(dim) {
   const map = CROSS_VALIDATED_RATE[dim] || {};
-  return new Set(Object.keys(map).filter(k => map[k].dir === 'pos'));
+  return new Set(Object.keys(map).filter(k => map[k].dir === 'pos' && !map[k].marginal));
 }
 
 // 某维度下允许参与「涨幅最高」评选的层标签
@@ -142,6 +164,13 @@ function negativeLabels(dim) {
 function marginalNegativeLabels(dim) {
   const map = CROSS_VALIDATED_RATE[dim] || {};
   return new Set(Object.keys(map).filter(k => map[k].dir === 'neg' && map[k].marginal));
+}
+
+// 边缘正向层（p 在 0.05~0.10、方向一致为正）：不能当结论用，
+// 但要在结论里点出来，否则用户会以为「这个维度完全没信号」。
+function marginalPositiveLabels(dim) {
+  const map = CROSS_VALIDATED_RATE[dim] || {};
+  return new Set(Object.keys(map).filter(k => map[k].dir === 'pos' && map[k].marginal));
 }
 
 // 该层是否只是边缘显著
@@ -168,6 +197,7 @@ module.exports = {
   avgEligibleLabels,
   negativeLabels,
   marginalNegativeLabels,
+  marginalPositiveLabels,
   isMarginal,
   signalOf,
   hasPositiveRate,

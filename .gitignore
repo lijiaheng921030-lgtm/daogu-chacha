@@ -3,3 +3,4 @@ _research/
 *.log
 temp_kline.csv
 .wrangler/
+.cache/

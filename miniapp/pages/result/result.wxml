@@ -18,7 +18,7 @@
     <!-- 统计分析 -->
     <view class="card">
       <view class="section-title">📊 次日红绿盘前日统计分析</view>
-      <view class="stat-note">说明：Tushare 未开通分钟级数据权限，拿不到真正的分时走势图。本报告用「当日均价线（VWAP）+ 日内K线形态 + 集合竞价 + 长下影」这四个可得的盘口/日线衍生数据来刻画当天走势，⑥⑦⑧⑨ 就是这四项。</view>
+      <view class="stat-note">说明：⑥⑦⑧⑨ 用的是「当日均价线（VWAP）+ 日内K线形态 + 集合竞价 + 长下影」这四个可得的盘口/日线衍生数据；⑩ 是<b>真实的日内走势形态</b>——用 BaoStock 的 5 分钟线（每个交易日 48 根）把当天走势分成 7 种形态。</view>
       <view class="stat-note">口径：「红占比」＝该层红盘次数占全部样本的比例；「红成功率」＝该层内红盘次数÷该层总次数，才是真正的成功率。先看「红成功率」，「红占比」只说明这种形态出现得多不多。</view>
       <view class="stat-note"><b>只看打✅的层：</b>每个分层旁边标了 ✅已验证 / ⚠反向 的，是这个形态在 10 只股票、3335 个样本上做过跨股票检验的结果（p&lt;0.05 且多数股票方向一致）。<b>没有标记的层都是单只股票上的噪声</b>——120 天样本很容易把随机波动选成「最佳」，所以只有通过跨股票验证的层才会被标为「成功率最高 / 涨幅最高」，没通过的维度会直接写「未发现稳定信号」，不会拿噪声层充数。表格可左右滑动查看完整列。</view>
 
@@ -225,8 +225,29 @@
         <view class="stat-conclusion">结论：{{report.conclusions.wick}}</view>
       </view>
 
-      <!-- 图例说明 -->
-      <view class="legend-row">
+      <!-- 10. 分时走势：真实 5 分钟线分出的日内形态 -->
+      <view class="stat-section">
+        <view class="stat-title">⑩ 分时走势：日内形态（BaoStock 真实5分钟线）</view>
+        <view class="stat-note">这一项用的是<b>真实分时</b>：BaoStock 每个交易日给 48 根 5 分钟线（09:35~11:30 + 13:05~15:00）。把这 48 根线按「什么时候见高、什么时候见低、均价线往哪走、尾盘拉不拉」归成 7 种形态，再看次日红绿。分类规则是固定阈值、按固定顺序判的，一天只落进一档（互斥可复现）；<b>先试过 K-means 聚类，轮廓系数只有 0.19、k≥5 直接出空簇</b>，说明日内形态不是天然分开的簇，硬聚类会造出不存在的边界，所以改用交易者看得懂的规则分档。</view>
+        <view class="stat-note">✅ 已验证：「S1 早盘冲高回落」层内红盘率 52.8%，比基准高 7.1 个百分点（p=0.0007，10 只股票里 7 只方向一致）；⚠️ 反向：「S2 早盘探底后回升」42.2%（p=0.0039，7 只方向为负）、「S5 均价线上翘」41.8%（p=0.0055，8 只方向为负）；⚠️ 边缘：「S7 横盘整理」50.7%（p=0.0628，8 只方向一致但没过 0.05，只供参考）。<b>形态只改变「赢不赢」的概率，不改变「赢的时候赚多少」</b>——各形态的红盘均涨都落在 1.89%~2.72%，和全样本基准 2.07% 基本一样。</view>
+        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
+        <view class="stat-table">
+          <view class="stat-table-row" wx:for="{{report.fenshi_stats}}" wx:key="index">
+            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
+            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
+            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
+            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
+            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
+            <text class="col-count green">{{item.green_count}}</text>
+            <text class="col-ratio green">{{item.green_ratio}}%</text>
+            <text class="col-avg green">{{item.green_avg}}%</text>
+          </view>
+        </view>
+        </scroll-view>
+        <view class="stat-conclusion">结论：{{report.conclusions.fenshi}}</view>
+      </view>
+
+      <!-- 图例说明 -->      <view class="legend-row">
         <view class="legend-item"><view class="legend-dot ratio-dot"></view><text>红盘成功率最高</text></view>
         <view class="legend-item"><view class="legend-dot avg-dot"></view><text>红盘均涨最高</text></view>
       </view>
@@ -251,13 +272,16 @@
           <text class="col-date">日期</text>
           <text class="col-pct">今日→明日</text>
           <text class="col-other">量比/MA5/换手</text>
-          <text class="col-other2">均价线/收盘位</text>
+          <text class="col-other2">均价线/收盘位/形态</text>
         </view>
         <view class="top10-row" wx:for="{{report.top10}}" wx:key="index">
           <text class="col-date">{{item.date}}</text>
           <text class="col-pct red">{{item.today_pct}}%→{{item.next_pct}}%</text>
           <text class="col-other">{{item.vol_ratio}}/{{item.vs_ma5}}%/{{item.turnover}}%</text>
-          <text class="col-other2">{{item.vwap_diff}}%/{{item.close_pos}}%</text>
+          <view class="col-other2">
+            <view>{{item.vwap_diff}}%/{{item.close_pos}}%</view>
+            <view class="fenshi-tag">{{item.fenshi}}</view>
+          </view>
         </view>
       </view>
     </view>

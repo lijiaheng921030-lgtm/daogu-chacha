@@ -7,6 +7,8 @@ const fs = require('fs');
 const {
   fetchKline, fetchDailyBasic, fetchAuction, byDate, searchStock,
 } = require('./tushare.js');
+const { fetchFenshiWindow } = require('./baostock.js');
+const fenshi = require('./fenshi.js');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -85,8 +87,7 @@ app.post('/api/statAnalyze', async (req, res) => {
     // 尝试最近1年，如果数据不足则逐步扩展到2年、3年
     let klineRows = null;
     let klineErr = null;
-    let basicData = [];
-    let auctionData = [];
+    let klineStartDate = null;
     for (const years of [1, 2, 3]) {
       // 用 Date 构造起始日，避免 2月29日 落到非闰年产生非法日期串
       const sd = new Date(today.getFullYear() - years, today.getMonth(), today.getDate());
@@ -95,9 +96,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       klineErr = { code: kr.code, msg: kr.msg };
       if (kr.ok && kr.rows.length > 10) {
         klineRows = kr.rows;
-        // 分时走势所需的辅助数据（失败不阻断主流程）
-        basicData = await fetchDailyBasic(thscode, startDate, endDate);
-        auctionData = await fetchAuction(thscode, startDate, endDate);
+        klineStartDate = startDate;
         break;
       }
     }
@@ -117,14 +116,49 @@ app.post('/api/statAnalyze', async (req, res) => {
     }
     const klineData = klineRows;
 
+    // 排序（按日期升序）
+    klineData.sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+
+    // 取近days个交易日
+    const n = Math.min(days, klineData.length - 1);
+    // 样本太少时，任何"成功率100%"都是噪声，必须拦下来而不是照样出结论
+    if (n < 20) {
+      return res.json({
+        code: 404,
+        msg: `该股票可用交易日不足（仅 ${n} 天，可能为次新股），无法做统计，请稍后再试`
+      });
+    }
+    const lastN = klineData.slice(-n);
+    const startIdx = klineData.length - n;
+
+    // 参与分析的n个交易日的起止日期
+    const analysisStartDate = klineData[startIdx].trade_date;
+    const analysisEndDate = klineData[klineData.length - 1].trade_date;
+
+    // ---- 拉取辅助数据（互不依赖，并行）----
+    //  ① 分时形态：BaoStock 真实 5 分钟线（慢，几十秒）
+    //  ② 换手率/量比：Tushare daily_basic
+    //  ③ 集合竞价盘口：Tushare stk_auction
+    // 分时数据起手往前留 10 个自然日，用来拿到区间第一天的「前收盘价」
+    const toDash = s => `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
+    const shiftDays = (dashStr, delta) => {
+      const d = new Date(`${dashStr}T00:00:00`);
+      d.setDate(d.getDate() + delta);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+    const fenshiPromise = fetchFenshiWindow(
+      thscode, shiftDays(toDash(analysisStartDate), -10), toDash(analysisEndDate), 35000
+    ).catch(e => ({ ok: false, error: e.message, days: {} }));
+
     // 按日期索引辅助数据（停牌/节假日会导致日期不匹配，用日期对齐而非下标对齐）
+    const [basicData, auctionData] = await Promise.all([
+      fetchDailyBasic(thscode, klineStartDate, endDate),
+      fetchAuction(thscode, klineStartDate, endDate),
+    ]);
     const basicMap = byDate(basicData);
     const auctionMap = byDate(auctionData);
     // 资金流向目前未参与任何统计，保留占位以备后续接入（不再每轮都去代理取数，避免加剧限流）
     const moneyflowMap = {};
-
-    // 排序（按日期升序）
-    klineData.sort((a, b) => a.trade_date.localeCompare(b.trade_date));
 
     // 计算指标
     const closes = klineData.map(d => parseFloat(d.close));
@@ -152,21 +186,15 @@ app.post('/api/statAnalyze', async (req, res) => {
     // 因此这里不再伪造，取不到就留 null（显示为「换手率数据缺失」）。
     const turnoverRate = closes.map(() => null);
 
-    // 取近days个交易日
-    const n = Math.min(days, klineData.length - 1);
-    // 样本太少时，任何"成功率100%"都是噪声，必须拦下来而不是照样出结论
-    if (n < 20) {
-      return res.json({
-        code: 404,
-        msg: `该股票可用交易日不足（仅 ${n} 天，可能为次新股），无法做统计，请稍后再试`
-      });
+    // 分时形态：等 BaoStock 的真实 5 分钟线到位（拉取失败不阻断主流程）
+    const fenshiWin = await fenshiPromise;
+    const fenshiShapes = fenshiWin && fenshiWin.ok ? fenshi.buildShapes(fenshiWin) : {};
+    if (fenshiWin && !fenshiWin.ok) {
+      console.error('BaoStock 分时数据拉取失败，本维度降级为缺失:', fenshiWin.error);
     }
-    const lastN = klineData.slice(-n);
-    const startIdx = klineData.length - n;
-
-    // 参与分析的n个交易日的起止日期
-    const analysisStartDate = klineData[startIdx].trade_date;
-    const analysisEndDate = klineData[klineData.length - 1].trade_date;
+    // 日期对齐：BaoStock 返回 'YYYY-MM-DD'，Tushare 是 'YYYYMMDD'
+    const fenshiByTradeDate = {};
+    Object.keys(fenshiShapes).forEach(d => { fenshiByTradeDate[d.replace(/-/g, '')] = fenshiShapes[d]; });
 
     // 同时收集红盘样本和绿盘样本
     const redSamples = [];
@@ -243,6 +271,8 @@ app.post('/api/statAnalyze', async (req, res) => {
       const realTurnover = basic && basic.turnover_rate != null ? parseFloat(basic.turnover_rate) : null;
       const realVolRatio = basic && basic.volume_ratio != null ? parseFloat(basic.volume_ratio) : null;
 
+      const fenshiDay = fenshiByTradeDate[row.trade_date];
+
       const sample = {
         date: dates[idx],
         today_pct: pctChgs[idx],
@@ -259,6 +289,10 @@ app.post('/api/statAnalyze', async (req, res) => {
         onePriceLimit: onePriceLimit,
         aucRatio: aucRatio,
         aucGap: aucGap,
+        // 日内形态（BaoStock 真实 5 分钟线）
+        fenshiLabel: fenshiDay ? fenshiDay.label : null,
+        fenshiShort: fenshiDay ? `${fenshiDay.id} ${fenshiDay.short}` : null,
+        fenshiId: fenshiDay ? fenshiDay.id : null,
         next_pct: nextPct
       };
       if (nextPct > 0) redSamples.push(sample);
@@ -446,6 +480,12 @@ app.post('/api/statAnalyze', async (req, res) => {
     });
     const wickStats = markBestMerged(dropSparse(wickRows, 5), 'wick');
 
+    // 10. 日内形态（BaoStock 真实 5 分钟线分出来的 7 种日内走势）
+    // 形态判定规则在 server/fenshi.js（线上与研究共用同一套阈值），
+    // 跨股票验证结论在 server/validated.js 的 fenshi 维度。
+    const fenshiRows = mergeStatBy(redSamples, greenSamples, s => s.fenshiLabel || '分时形态数据缺失');
+    const fenshiStats = markBestMerged(dropSparse(fenshiRows, 3), 'fenshi');
+
     // 9. 综合条件
     function makeCondStat(redArr, greenArr, filterFn, label) {
       const r = redArr.filter(filterFn);
@@ -592,16 +632,27 @@ app.post('/api/statAnalyze', async (req, res) => {
       }
       return null;
     };
-    const conclusionText = (rows, dim) => {
+    // 边缘显著的正向信号（方向一致为正，但 p 没到 0.05）——不能当结论，但要提一句，
+    // 否则用户会以为「这个维度完全没信号」。
+    const marginalPositiveText = (rows, dim) => {
+      const marg = validated.marginalPositiveLabels(dim);
+      const hit = marg.size ? rows.find(x => marg.has(x.label)) : null;
+      if (!hit) return null;
+      return `边缘正向信号（仅供参考，不作为结论）：${hit.label}（本股票层内红盘率 ${layerRate(hit)}%，跨股检验 p=0.0628 没过 0.05）`;
+    };
+    const conclusionText = (rows, dim, avgOverride) => {
       const r = pick(rows, 'isBestRatio'), a = pick(rows, 'isBestAvg');
       const negTxt = negativeSignalText(rows, dim);
+      const margPosTxt = marginalPositiveText(rows, dim);
       const ratioPart = r
         ? `【成功率最高】${r.label}（层内红盘率${layerRate(r)}%，${r.red_count}次）`
         : `【成功率最高】${fallbackText(rows, dim, 'rate')}`;
-      const avgPart = a
-        ? `【涨幅最高】${a.label}（红盘均涨${a.red_avg}%）`
-        : `【涨幅最高】${fallbackText(rows, dim, 'avg')}`;
-      return `${ratioPart}；${avgPart}${negTxt ? `；${negTxt}` : ''}`;
+      const avgPart = avgOverride
+        ? `【涨幅最高】${avgOverride}`
+        : (a
+          ? `【涨幅最高】${a.label}（红盘均涨${a.red_avg}%）`
+          : `【涨幅最高】${fallbackText(rows, dim, 'avg')}`);
+      return `${ratioPart}；${avgPart}${negTxt ? `；${negTxt}` : ''}${margPosTxt ? `；${margPosTxt}` : ''}`;
     };
 
     const conclusions = {
@@ -613,8 +664,12 @@ app.post('/api/statAnalyze', async (req, res) => {
       shape: conclusionText(shapeStats, 'shape'),
       auc: conclusionText(aucStats, 'auc'),
       wick: conclusionText(wickStats, 'wick'),
+      // 日内形态维度：涨幅那一栏必须说清「形态不改幅度」，不能只写「未发现稳定信号」，
+      // 否则用户会以为这个维度白做了。
+      fenshi: conclusionText(fenshiStats, 'fenshi',
+        '本维度没有验证过的涨幅层——各形态的「红盘日均涨」都落在 1.89%~2.72% 之间，和全样本基准 2.07% 基本一致（逐股方向一致性只有 2/10~6/10，远不到 7/10）。也就是说：日内形态能改变「赢不赢」的概率，但改变不了「赢的时候赚多少」'),
       cond: conclusionText(condStats, 'cond'),
-      overall: `综合来看，最优买入条件为【${bestCondAvg ? bestCondAvg.label : '暂无'}】，红盘均涨最高（${bestCondAvg ? bestCondAvg.red_avg : '0'}%）；若追求稳定则关注【${bestCondRatio ? bestCondRatio.label : '暂无'}】（层内红盘率${bestCondRatio ? layerRate(bestCondRatio) : '0'}%）。分时走势方面，日内形态最关键的是【${dimPickText(shapeStats, 'shape', 'isBestRatio')}】（层内红盘率${bestShapeRatio ? layerRate(bestShapeRatio) : '0'}%），收盘价与当日均价线的位置参考【${dimPickText(vwapStats, 'vwap', 'isBestRatio')}】，集合竞价量能参考【${dimPickText(aucStats, 'auc', 'isBestRatio')}】，长下影形态参考【${dimPickText(wickStats, 'wick', 'isBestRatio')}】；量能参考【${dimPickText(volStats, 'vol', 'isBestAvg')}】，5日线参考【${dimPickText(ma5Stats, 'ma5', 'isBestAvg')}】。注意：只有通过跨股票验证的层才会被标为「最高」，没验证过的维度会直说「无稳定信号」，不用单股噪声层充数。`
+      overall: `综合来看，最优买入条件为【${bestCondAvg ? bestCondAvg.label : '暂无'}】，红盘均涨最高（${bestCondAvg ? bestCondAvg.red_avg : '0'}%）；若追求稳定则关注【${bestCondRatio ? bestCondRatio.label : '暂无'}】（层内红盘率${bestCondRatio ? layerRate(bestCondRatio) : '0'}%）。分时走势方面，真实5分钟线分出的日内形态最关键的是【${dimPickText(fenshiStats, 'fenshi', 'isBestRatio')}】，收盘位置×均价线的交叉形态参考【${dimPickText(shapeStats, 'shape', 'isBestRatio')}】（层内红盘率${bestShapeRatio ? layerRate(bestShapeRatio) : '0'}%），收盘价与当日均价线的位置参考【${dimPickText(vwapStats, 'vwap', 'isBestRatio')}】，集合竞价量能参考【${dimPickText(aucStats, 'auc', 'isBestRatio')}】，长下影形态参考【${dimPickText(wickStats, 'wick', 'isBestRatio')}】；量能参考【${dimPickText(volStats, 'vol', 'isBestAvg')}】，5日线参考【${dimPickText(ma5Stats, 'ma5', 'isBestAvg')}】。注意：只有通过跨股票验证的层才会被标为「最高」，没验证过的维度会直说「无稳定信号」，不用单股噪声层充数。`
     };
 
     // Top10红盘样本
@@ -656,6 +711,7 @@ app.post('/api/statAnalyze', async (req, res) => {
         shape_stats: shapeStats,
         auc_stats: aucStats,
         wick_stats: wickStats,
+        fenshi_stats: fenshiStats,
         cond_stats: condStats,
         conclusions: conclusions,
         top10: top10.map(s => ({
@@ -670,6 +726,7 @@ app.post('/api/statAnalyze', async (req, res) => {
           close_pos: s.closePos == null ? '—' : s.closePos.toFixed(0),
           low_shadow: s.lowShadow == null ? '—' : s.lowShadow.toFixed(2),
           auc_ratio: s.aucRatio == null ? '—' : s.aucRatio.toFixed(2),
+          fenshi: s.fenshiShort || '—',
         }))
       }
     });

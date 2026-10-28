@@ -37,6 +37,17 @@ const row = (label, red, green, avg) => ({
   red_avg: avg || '2.00', sample_count: red + green,
 });
 
+// 服务端源码全文（分层文案有些已经抽到独立模块里，所以把 server/ 下所有 js 都拼起来检索）
+function readServerSource() {
+  const fs = require('fs');
+  const path = require('path');
+  const dir = path.join(__dirname, '..', 'server');
+  return fs.readdirSync(dir)
+    .filter(f => f.endsWith('.js'))
+    .map(f => fs.readFileSync(path.join(dir, f), 'utf8'))
+    .join('\n');
+}
+
 console.log('\n=== 1) 未验证的层不得夺冠 ===');
 check('澳洋健康的「前一天跌超5%」这种单股噪声层不能拿成功率第一', () => {
   // 该层在跨股验证里 p=0.98（纯噪声），但单股上红盘率很高
@@ -119,24 +130,29 @@ check('未通过涨幅验证的层不能拿涨幅第一', () => {
 
 console.log('\n=== 5) 验证表自身的一致性 ===');
 check('每个维度的正向层集合与 negativeLabels 不重叠', () => {
-  ['vol', 'ma5', 'ma20', 'dist', 'cond', 'vwap', 'shape', 'auc', 'wick'].forEach(dim => {
+  ['vol', 'ma5', 'ma20', 'dist', 'cond', 'vwap', 'shape', 'auc', 'wick', 'fenshi'].forEach(dim => {
     const pos = validated.rateEligibleLabels(dim);
     const neg = validated.negativeLabels(dim);
     pos.forEach(l => assert.strictEqual(neg.has(l), false, `${dim}/${l} 同时被标成正反向`));
   });
 });
 
-check('验证表里所有层的 p 值都小于 0.05，或明确标注为边缘负向', () => {
+check('验证表里所有层的 p 值都小于 0.05，或明确标注为边缘', () => {
   Object.keys(validated.CROSS_VALIDATED_RATE).forEach(dim => {
     Object.keys(validated.CROSS_VALIDATED_RATE[dim]).forEach(l => {
       const v = validated.CROSS_VALIDATED_RATE[dim][l];
       if (v.marginal) {
-        // 边缘层只允许是负向信号（提示「更容易绿」），且 p 必须落在 0.05~0.10
-        assert.strictEqual(v.dir, 'neg', `${dim}/${l} 边缘信号只能是负向`);
+        // 边缘层（p 在 0.05~0.10）：方向一致但检验没过 0.05，
+        // 正负都允许，但一律不能参与任何评选，只在结论里提示。
+        assert.ok(v.dir === 'pos' || v.dir === 'neg', `${dim}/${l} 边缘信号方向非法`);
         assert.ok(v.p >= 0.05 && v.p < 0.10, `${dim}/${l} 边缘信号 p=${v.p} 应在 0.05~0.10`);
         assert.ok(!validated.rateEligibleLabels(dim).has(l), `${dim}/${l} 边缘层不能参与成功率评选`);
         assert.ok(!validated.negativeLabels(dim).has(l), `${dim}/${l} 边缘层不能进强负向集合`);
-        assert.ok(validated.marginalNegativeLabels(dim).has(l), `${dim}/${l} 应在边缘负向集合里`);
+        if (v.dir === 'neg') {
+          assert.ok(validated.marginalNegativeLabels(dim).has(l), `${dim}/${l} 应在边缘负向集合里`);
+        } else {
+          assert.ok(validated.marginalPositiveLabels(dim).has(l), `${dim}/${l} 应在边缘正向集合里`);
+        }
       } else {
         assert.ok(v.p < 0.05, `${dim}/${l} 的 p=${v.p} 不该出现在验证表里`);
       }
@@ -147,8 +163,7 @@ check('验证表里所有层的 p 值都小于 0.05，或明确标注为边缘�
 
 check('所有验证过的层标签都真实存在于对应维度的分层里', () => {
   // 防止改了服务端分档文案却忘了同步验证表（会导致信号静默失效）
-  const fs = require('fs');
-  const src = fs.readFileSync(require.resolve('../server/index.js'), 'utf8');
+  const src = readServerSource();
   const dimChecks = {
     vol: ['缩量(<0.7)', '放量(1.2-2.0)'],
     ma5: ['股价在5日线上方（偏离>5%）', '股价在5日线下方（0~-5%）'],
@@ -158,20 +173,20 @@ check('所有验证过的层标签都真实存在于对应维度的分层里', (
     shape: ['A 弱势收盘（收在日内最低位且破均价线）', 'D 强势收盘（收在日内最高位且站上均价线）'],
     auc: ['竞价温和放量（1.2~2.5倍）', '竞价缩量（<近5日竞价均量0.8倍）', '竞价过度放量（≥2.5倍）'],
     wick: ['盘中杀跌后拉回（下影线>1.5%）', '无长下影（下影线≤1.5%）'],
+    fenshi: ['S1 早盘冲高回落', 'S2 早盘探底后回升', 'S5 均价线上翘（重心上移）', 'S7 横盘整理（均价线走平）'],
     cond: ['收盘价跌破当日均价线 + 缩量 + 股价在5日线下方',
             '集合竞价温和放量（1.2~2.5倍） + 当日缩量',
             '收盘价跌破均价线 + 收在日内最低位 + 缩量'],
   };
   Object.keys(dimChecks).forEach(dim => {
     dimChecks[dim].forEach(l => {
-      assert.ok(src.includes(l), `服务端 index.js 里找不到分层文案「${l}」（维度 ${dim}）`);
+      assert.ok(src.includes(l), `服务端里找不到分层文案「${l}」（维度 ${dim}）`);
     });
   });
 });
 
 check('验证表里的层名在服务端都能被检索到', () => {
-  const fs = require('fs');
-  const src = fs.readFileSync(require.resolve('../server/index.js'), 'utf8');
+  const src = readServerSource();
   Object.keys(validated.CROSS_VALIDATED_RATE).forEach(dim => {
     Object.keys(validated.CROSS_VALIDATED_RATE[dim]).forEach(l => {
       assert.ok(src.includes(l), `服务端找不到验证过的层「${l}」（维度 ${dim}）`);
@@ -182,6 +197,108 @@ check('验证表里的层名在服务端都能被检索到', () => {
       assert.ok(src.includes(l), `服务端找不到涨幅验证过的层「${l}」（维度 ${dim}）`);
     });
   });
+});
+
+console.log('\n=== 6) 日内形态维度 ===');
+check('S1 早盘冲高回落是唯一能拿「成功率最高」的形态', () => {
+  const rows = [
+    row('S1 早盘冲高回落', 18, 16, '2.02'),
+    row('S2 早盘探底后回升', 15, 21, '2.07'),
+    row('S5 均价线上翘（重心上移）', 12, 17, '2.51'),
+    row('S7 横盘整理（均价线走平）', 20, 19, '1.93'),
+    row('S3 早盘见顶后阴跌', 16, 18, '1.89'),
+  ];
+  const out = markBestMerged(rows, 'fenshi');
+  assert.strictEqual(out.find(x => x.label === 'S1 早盘冲高回落').isBestRatio, true);
+  // 反向层不能拿成功率第一
+  assert.strictEqual(out.find(x => x.label === 'S2 早盘探底后回升').isBestRatio, false);
+  assert.strictEqual(out.find(x => x.label === 'S5 均价线上翘（重心上移）').isBestRatio, false);
+  // 边缘正向层（S7，p=0.0628）也不能拿成功率第一
+  assert.strictEqual(out.find(x => x.label === 'S7 横盘整理（均价线走平）').isBestRatio, false);
+  // 未验证的形态（S3）更不能
+  assert.strictEqual(out.find(x => x.label === 'S3 早盘见顶后阴跌').isBestRatio, false);
+});
+
+check('S2 / S5 被标成反向信号，S7 被标成边缘信号', () => {
+  const rows = [
+    row('S2 早盘探底后回升', 15, 21, '2.07'),
+    row('S5 均价线上翘（重心上移）', 12, 17, '2.51'),
+    row('S7 横盘整理（均价线走平）', 20, 19, '1.93'),
+  ];
+  const out = markBestMerged(rows, 'fenshi');
+  assert.strictEqual(out.find(x => x.label === 'S2 早盘探底后回升').signal, 'neg');
+  assert.strictEqual(out.find(x => x.label === 'S5 均价线上翘（重心上移）').signal, 'neg');
+  assert.strictEqual(out.find(x => x.label === 'S7 横盘整理（均价线走平）').signal, 'pos');
+  assert.strictEqual(validated.isMarginal('fenshi', 'S7 横盘整理（均价线走平）'), true);
+});
+
+check('日内形态维度没有涨幅冠军（形态不改幅度）', () => {
+  const rows = [
+    row('S1 早盘冲高回落', 18, 16, '2.02'),
+    row('S4 尾盘拉升', 6, 2, '2.72'),
+  ];
+  const out = markBestMerged(rows, 'fenshi');
+  out.forEach(x => assert.strictEqual(x.isBestAvg, false, '形态维度不该有涨幅冠军'));
+  assert.strictEqual(validated.avgEligibleLabels('fenshi').size, 0);
+});
+
+check('服务端的形态判定规则和验证表里的层名一一对应', () => {
+  const fenshiMod = require('../server/fenshi.js');
+  const labels = fenshiMod.ALL.map(s => s.label);
+  assert.strictEqual(labels.length, 8, '应有 7 种形态 + 其他');
+  assert.strictEqual(new Set(labels).size, 8, '形态层名不能重复');
+  // 验证表里出现的每个层名，都必须是真实的形态层名
+  Object.keys(validated.CROSS_VALIDATED_RATE.fenshi).forEach(l => {
+    assert.ok(labels.includes(l), `验证表里的「${l}」不是合法形态层名`);
+  });
+});
+
+check('服务端形态规则与研究阶段完全一致（3395 天逐日比对）', () => {
+  // 规则抄错不会报错、只会静默给出错的「成功率最高」，所以必须逐日比对
+  const fs = require('fs');
+  const path = require('path');
+  const researchDir = path.join(__dirname, '..', '_research');
+  if (!fs.existsSync(path.join(researchDir, 'dataset.json'))) {
+    console.log('   （跳过：研究样本集不在本地）');
+    return;
+  }
+  const dataset = JSON.parse(fs.readFileSync(path.join(researchDir, 'dataset.json'), 'utf8'));
+  const researchRules = require(path.join(researchDir, 'shape_rules.js'));
+  const fenshiMod = require('../server/fenshi.js');
+  const bsdataDir = path.join(researchDir, 'bsdata');
+  let checked = 0, mismatch = 0;
+  for (const code of [...new Set(dataset.map(s => s.code))]) {
+    const minPath = path.join(bsdataDir, `${code}_5min.json`);
+    const dayPath = path.join(bsdataDir, `${code}_daily.json`);
+    if (!fs.existsSync(minPath) || !fs.existsSync(dayPath)) continue;
+    const min = JSON.parse(fs.readFileSync(minPath, 'utf8'));
+    const day = JSON.parse(fs.readFileSync(dayPath, 'utf8'));
+    const days = {};
+    min.rows.forEach(r => {
+      const d = r[0];
+      if (!days[d]) days[d] = { bars: [], ohlc: null };
+      days[d].bars.push({ t: r[1].slice(8, 12), o: +r[3], h: +r[4], l: +r[5], c: +r[6], v: +r[7], a: +r[8] });
+    });
+    day.rows.forEach(r => {
+      const d = r[0];
+      if (!days[d]) days[d] = { bars: [], ohlc: null };
+      days[d].ohlc = { open: +r[2], high: +r[3], low: +r[4], close: +r[5], volume: +r[6], amount: +r[7] };
+    });
+    Object.keys(days).forEach(d => {
+      days[d].bars.sort((x, y) => x.t.localeCompare(y.t));
+      if (!days[d].ohlc) delete days[d];
+    });
+    const built = fenshiMod.buildShapes({ days });
+    dataset.filter(s => s.code === code).forEach(s => {
+      const want = researchRules.classifyShape(s.feats);
+      const got = built[s.date];
+      if (!got) return;
+      checked++;
+      if (got.id !== want) mismatch++;
+    });
+  }
+  assert.ok(checked > 3000, `比对样本太少（${checked}），校验没意义`);
+  assert.strictEqual(mismatch, 0, `服务端与研究阶段有 ${mismatch} 天判定不一致`);
 });
 
 console.log(`\n${fail === 0 ? '全部通过 ✅' : fail + ' 个失败 ❌'}（${pass} 通过 / ${fail} 失败）`);

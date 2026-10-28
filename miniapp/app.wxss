@@ -653,6 +653,12 @@ page {
   font-size: 20rpx;
 }
 
+/* Top10 里的日内形态标签 */
+.fenshi-tag {
+  color: #4A7FB5;
+  font-size: 18rpx;
+}
+
 .risk-tip {
   font-size: 22rpx;
   color: #666666;
