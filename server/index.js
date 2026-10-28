@@ -147,7 +147,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     };
     const fenshiPromise = fetchFenshiWindow(
-      thscode, shiftDays(toDash(analysisStartDate), -10), toDash(analysisEndDate), 35000
+      thscode, shiftDays(toDash(analysisStartDate), -10), toDash(analysisEndDate), 45000
     ).catch(e => ({ ok: false, error: e.message, days: {} }));
 
     // 按日期索引辅助数据（停牌/节假日会导致日期不匹配，用日期对齐而非下标对齐）
