@@ -499,6 +499,31 @@ page {
 .green { color: #0F9D58; }
 .bold { font-weight: 700; }
 
+/* 分层旁的信号标记：✅已验证（跨股票检验通过的正/反向信号） ⚠反向（看空信号） */
+.sig-tag {
+  display: inline-block;
+  margin-left: 8rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 6rpx;
+  font-size: 18rpx;
+  vertical-align: middle;
+}
+
+.sig-pos {
+  background: rgba(15, 157, 88, 0.22);
+  color: #4ADE80;
+}
+
+.sig-neg {
+  background: rgba(233, 69, 96, 0.22);
+  color: #FF7A8F;
+}
+
+.sig-marg {
+  background: rgba(212, 175, 55, 0.2);
+  color: #D4AF37;
+}
+
 .legend-row {
   display: flex;
   gap: 30rpx;

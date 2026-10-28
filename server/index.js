@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { analyze } = require('./backtest.js');
+const validated = require('./validated.js');
 const path = require('path');
 const fs = require('fs');
 const {
@@ -200,8 +201,10 @@ app.post('/api/statAnalyze', async (req, res) => {
         if (high > low) {
           closePos = (close - low) / (high - low) * 100;
         } else if (high === low) {
-          onePriceLimit = true;   // 全天无波动（一字板）
-          closePos = 100;
+          // 一字板：全天无波动，收盘位置没有意义，置 null（不能置 100，
+          // 否则会被误判成「D 强势收盘：收在日内最高位且站上均价线」）
+          onePriceLimit = true;
+          closePos = null;
         }
       }
 
@@ -220,10 +223,15 @@ app.post('/api/statAnalyze', async (req, res) => {
         let sum5 = 0, c5 = 0;
         for (let j = Math.max(0, idx - 5); j < idx; j++) {
           const prevAuc = auctionMap[klineData[j].trade_date];
-          if (prevAuc && prevAuc.vol != null) { sum5 += parseFloat(prevAuc.vol); c5++; }
+          const pv = prevAuc && prevAuc.vol != null ? parseFloat(prevAuc.vol) : null;
+          // 竞价量为 0 的异常日要剔除，否则会拉低均值、把放量误判成常量
+          if (pv != null && pv > 0) { sum5 += pv; c5++; }
         }
-        const avg5 = c5 ? sum5 / c5 : 0;
-        if (avg5 > 0 && auc.vol != null) aucRatio = parseFloat(auc.vol) / avg5;
+        // 有效历史不足 3 天则判为缺失，不硬算
+        const avg5 = c5 >= 3 ? sum5 / c5 : null;
+        if (avg5 != null && auc.vol != null && parseFloat(auc.vol) > 0) {
+          aucRatio = parseFloat(auc.vol) / avg5;
+        }
         // 竞价价相对前收的涨跌幅
         if (auc.price != null && auc.pre_close) {
           aucGap = (parseFloat(auc.price) - parseFloat(auc.pre_close)) / parseFloat(auc.pre_close) * 100;
@@ -301,25 +309,37 @@ app.post('/api/statAnalyze', async (req, res) => {
     // 规则：
     //  - 「数据缺失」类分层永远不参与评选（缺数据不是交易信号）
     //  - 参与评选的层至少要有 5 个红盘样本，否则 3~4 个样本也能"夺冠"，会误导用户
-    //  - 用容差比较避免浮点全等导致并列层漏标
-    function markBestMerged(rows) {
+    //  - 【关键】候选层必须先通过「跨股票验证」（validated.js）。
+    //    单只股票 120 个样本很容易把纯噪声层选成冠军——比如澳洋健康历史上
+    //    「前一天跌超5%」红盘率 60% 看着很棒，但跨 10 只股票检验 p=0.98，纯噪声。
+    //    所以：成功率只在「跨股验证为正向」的层里选，涨幅只在「跨股验证为高涨幅」的层里选。
+    //    该维度若没有任何通过验证的正向层，就诚实地说「本维度没有验证过的稳定信号」。
+    function markBestMerged(rows, dim) {
       const isMissing = x => /缺失/.test(x.label);
-      const eligible = rows.filter(x => !isMissing(x) && x.red_count >= 5 && x.sample_count >= 10);
-      if (eligible.length === 0) return rows.map(x => ({ ...x, isBestRatio: false, isBestAvg: false }));
+      const rateSet = validated.rateEligibleLabels(dim);
+      const avgSet = validated.avgEligibleLabels(dim);
+      const enough = x => !isMissing(x) && x.red_count >= 5 && x.sample_count >= 10;
+      const rateOk = x => enough(x) && rateSet.has(x.label);
+      const avgOk = x => enough(x) && avgSet.has(x.label);
+      const rateCandidates = rows.filter(rateOk);
+      const avgCandidates = rows.filter(avgOk);
       // "成功率" = 该层内红盘次数 / 该层总次数（不是占全样本的比例）
       const layerRate = x => {
         const c = x.red_count + x.green_count;
         return c > 0 ? x.red_count / c : 0;
       };
-      const maxRate = Math.max(...eligible.map(layerRate));
-      const maxAvg = Math.max(...eligible.map(x => parseFloat(x.red_avg)));
+      const maxRate = rateCandidates.length ? Math.max(...rateCandidates.map(layerRate)) : null;
+      const maxAvg = avgCandidates.length
+        ? Math.max(...avgCandidates.map(x => parseFloat(x.red_avg))) : null;
       const EPS = 1e-9;
       return rows.map(x => {
-        const ok = !isMissing(x) && x.red_count >= 5 && x.sample_count >= 10;
+        const sig = validated.signalOf(dim, x.label);
         return {
           ...x,
-          isBestRatio: ok && Math.abs(layerRate(x) - maxRate) < EPS,
-          isBestAvg: ok && Math.abs(parseFloat(x.red_avg) - maxAvg) < 1e-9,
+          signal: sig,                                   // 'pos' | 'neg' | null
+          marginal: validated.isMarginal(dim, x.label), // true = 只是边缘显著
+          isBestRatio: rateOk(x) && Math.abs(layerRate(x) - maxRate) < EPS,
+          isBestAvg: avgOk(x) && Math.abs(parseFloat(x.red_avg) - maxAvg) < 1e-9,
         };
       });
     }
@@ -331,7 +351,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.volRatio < 2.0) return '放量(1.2-2.0)';
       return '巨量(>2.0)';
     });
-    const volStats = markBestMerged(dropSparse(volRows));
+    const volStats = markBestMerged(dropSparse(volRows), 'vol');
 
     // 2. MA5分层（偏离5日线百分比）
     const ma5Rows = mergeStatBy(redSamples, greenSamples, s => {
@@ -340,7 +360,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.vsMa5 > -5) return '股价在5日线下方（0~-5%）';
       return '股价在5日线下方（偏离<-5%）';
     });
-    const ma5Stats = markBestMerged(dropSparse(ma5Rows));
+    const ma5Stats = markBestMerged(dropSparse(ma5Rows), 'ma5');
 
     // 3. MA20分层（偏离20日线百分比）
     const ma20Rows = mergeStatBy(redSamples, greenSamples, s => {
@@ -349,7 +369,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.vsMa20 > -10) return '股价在20日线下方（0~-10%）';
       return '股价在20日线下方（偏离<-10%）';
     });
-    const ma20Stats = markBestMerged(dropSparse(ma20Rows));
+    const ma20Stats = markBestMerged(dropSparse(ma20Rows), 'ma20');
 
     // 4. 换手率分层（依赖 daily_basic，取不到就整层缺失，不伪造）
     const turnRows = mergeStatBy(redSamples, greenSamples, s => {
@@ -359,7 +379,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.turnoverRate <= 6) return '高换(3-6%)';
       return '巨量换手(>6%)';
     });
-    const turnStats = markBestMerged(dropSparse(turnRows));
+    const turnStats = markBestMerged(dropSparse(turnRows), 'turn');
 
     // 5. 前日涨跌幅分布
     const distRows = mergeStatBy(redSamples, greenSamples, s => {
@@ -372,7 +392,7 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.today_pct > -5) return '-5~-3%';
       return '<-5%';
     });
-    const distStats = markBestMerged(dropSparse(distRows));
+    const distStats = markBestMerged(dropSparse(distRows), 'dist');
 
     // ===== 分时走势维度 =====
     // 说明：Tushare 无分钟级权限，拿不到真正的分时均线走势。
@@ -386,30 +406,45 @@ app.post('/api/statAnalyze', async (req, res) => {
       if (s.vwapDiff < -0.5) return '收盘价低于当日均价线0.5%以上';
       return '收盘价贴近当日均价线(±0.5%)';
     });
-    const vwapStats = markBestMerged(dropSparse(vwapRows));
+    const vwapStats = markBestMerged(dropSparse(vwapRows), 'vwap');
 
-    // 7. 日内K线形态（下影线 + 收盘位置）
-    // 先按「有没有长下影线」分流，再看收盘位置——这样每个标签含义唯一，层与层之间可比。
+    // 7. 日内K线形态：收盘位置 × 均价线偏离 交叉分档
+    // 为什么用交叉表而不是「先看有没有长下影、再看收盘位置」：
+    //   收盘位置 与 均价线偏离 高度相关（Spearman 0.90），拆成两个独立分层会重复计票；
+    //   交叉后「A 弱势收盘」层是全维度统计最稳的一层（层内红盘率 55.4%，p=0.0015，9/10 只股票方向一致）。
     const shapeRows = mergeStatBy(redSamples, greenSamples, s => {
       if (s.onePriceLimit) return '一字板（当天无波动）';
-      if (s.closePos == null) return '日内高低点数据缺失';
-      const longLower = s.lowShadow != null && s.lowShadow > 2;
-      if (longLower) return '盘中杀跌后拉回（长下影线>2%）';
-      if (s.closePos > 70) return '无长下影·收盘在当日高位（>70%）';
-      if (s.closePos < 30) return '无长下影·收盘在当日低位（<30%）';
-      return '无长下影·收盘在当日中部（30~70%）';
+      if (s.closePos == null || s.vwapDiff == null) return '日内形态数据缺失';
+      if (s.closePos <= 10 && s.vwapDiff < -0.5) return 'A 弱势收盘（收在日内最低位且破均价线）';
+      if (s.closePos >= 80 && s.vwapDiff > 0.5) return 'D 强势收盘（收在日内最高位且站上均价线）';
+      if (s.vwapDiff < -0.5) return 'B 破均价线但未收在最低位';
+      if (s.vwapDiff > 0.5) return 'C 站上均价线但未收在最高位';
+      return 'E 全天围绕均价线震荡（±0.5%）';
     });
-    const shapeStats = markBestMerged(dropSparse(shapeRows));
+    const shapeStats = markBestMerged(dropSparse(shapeRows, 5), 'shape');
 
     // 8. 集合竞价强弱（真实盘口数据）
     // 口径：今日竞价量 / 前5日【竞价】平均量（同源同单位，stk_auction.vol 单位=股）
+    // 必须切成 4 档：原来 3 档把「1.2~2.5 倍」和「≥2.5 倍」混成「放量」一档，
+    // 把稳健的温和放量信号稀释掉了。4 档后「竞价温和放量 1.2~2.5 倍」层内红盘率 53.2%
+    // （z=3.39，p=0.0007，8/10 只股票方向一致）。
     const aucRows = mergeStatBy(redSamples, greenSamples, s => {
       if (s.aucRatio == null) return '集合竞价数据缺失';
-      if (s.aucRatio > 1.2) return '竞价放量（>近5日竞价均量1.2倍）';
-      if (s.aucRatio > 0.5) return '竞价常量（0.5~1.2倍）';
-      return '竞价缩量（<近5日竞价均量0.5倍）';
+      if (s.aucRatio < 0.8) return '竞价缩量（<近5日竞价均量0.8倍）';
+      if (s.aucRatio < 1.2) return '竞价常量（0.8~1.2倍）';
+      if (s.aucRatio < 2.5) return '竞价温和放量（1.2~2.5倍）';
+      return '竞价过度放量（≥2.5倍）';
     });
-    const aucStats = markBestMerged(dropSparse(aucRows));
+    const aucStats = markBestMerged(dropSparse(aucRows, 5), 'auc');
+
+    // 9. 长下影（盘中杀跌后拉回）—— 分时走势里唯一稳定的看空形态
+    // 阈值取 1.5%：2% 时各季度表现不稳（7 只有效股票），降到 1.5% 后 8 只股票方向一致、
+    // 季度 44/33/37/45 均低于同期其余样本，bootstrap 复现率 0%（即负向极稳）。
+    const wickRows = mergeStatBy(redSamples, greenSamples, s => {
+      if (s.lowShadow == null) return '下影线数据缺失';
+      return s.lowShadow > 1.5 ? '盘中杀跌后拉回（下影线>1.5%）' : '无长下影（下影线≤1.5%）';
+    });
+    const wickStats = markBestMerged(dropSparse(wickRows, 5), 'wick');
 
     // 9. 综合条件
     function makeCondStat(redArr, greenArr, filterFn, label) {
@@ -440,17 +475,29 @@ app.post('/api/statAnalyze', async (req, res) => {
       makeCondStat(redSamples, greenSamples,
         s => s.vwapDiff != null && s.vwapDiff < -0.5 && s.vsMa5 < 0,
         '收盘价跌破当日均价线 + 股价在5日线下方'),
-      // 反向信号：盘中杀跌后拉回（长下影线），次日绿盘概率反而更高（层内红盘率40.1%）
+      // 反向信号：盘中杀跌后拉回（长下影线），次日绿盘概率反而更高（层内红盘率40.5%）
       makeCondStat(redSamples, greenSamples,
-        s => s.lowShadow != null && s.lowShadow > 2,
-        '盘中杀跌后拉回（长下影线>2%，次日偏弱）'),
+        s => s.lowShadow != null && s.lowShadow > 1.5,
+        '盘中杀跌后拉回（下影线>1.5%，次日偏弱）'),
+      makeCondStat(redSamples, greenSamples,
+        s => s.lowShadow != null && s.lowShadow > 1.5 && s.vsMa5 < 0,
+        '盘中杀跌后拉回（下影线>1.5%）+ 股价在5日线下方'),
       // 原有条件
       makeCondStat(redSamples, greenSamples, s => s.today_pct < -3 && s.volRatio < 1 && s.vsMa5 < 0, '前一天跌超3% + 缩量 + 股价在5日线下方'),
       makeCondStat(redSamples, greenSamples, s => s.today_pct < -5 && s.volRatio < 0.8, '前一天跌超5% + 极度缩量'),
       makeCondStat(redSamples, greenSamples, s => s.today_pct < -3 && s.vsMa5 < -3, '前一天跌超3% + 股价偏离5日线3%以上'),
       makeCondStat(redSamples, greenSamples, s => s.today_pct < -3 && s.vsMa20 < -5, '前一天跌超3% + 股价偏离20日线5%以上'),
+      // —— 集合竞价温和放量（1.2~2.5倍）单独是一个正向信号，与日内形态几乎正交，
+      //    叠加「当日缩量」后是全表最稳的一行（层内红盘率58.7%，z=3.97，8/10 只股票方向一致）
+      makeCondStat(redSamples, greenSamples,
+        s => s.aucRatio != null && s.aucRatio >= 1.2 && s.aucRatio < 2.5 && s.volRatio < 1,
+        '集合竞价温和放量（1.2~2.5倍） + 当日缩量'),
+      // —— 弱势收盘（A层）+ 缩量：层内红盘率61.2%，z=4.00，9/10 只股票方向一致
+      makeCondStat(redSamples, greenSamples,
+        s => s.closePos != null && s.closePos <= 10 && s.vwapDiff != null && s.vwapDiff < -0.5 && s.volRatio < 1,
+        '收盘价跌破均价线 + 收在日内最低位 + 缩量'),
     ];
-    const condStats = markBestMerged(dropSparse(condStatsRaw));
+    const condStats = markBestMerged(dropSparse(condStatsRaw), 'cond');
 
     // 每个维度找成功率最高（isBestRatio）和涨幅最高（isBestAvg）
     const bestVolRatio = volStats.find(x => x.isBestRatio);
@@ -467,6 +514,26 @@ app.post('/api/statAnalyze', async (req, res) => {
     const bestShapeAvg = shapeStats.find(x => x.isBestAvg);
     const bestAucRatio = aucStats.find(x => x.isBestRatio);
     const bestAucAvg = aucStats.find(x => x.isBestAvg);
+    const bestWickRatio = wickStats.find(x => x.isBestRatio);
+    // 某个维度如果只有「反向信号」（比如长下影），总体结论里要写成看空提示，
+    // 而不是一句「暂无」让用户以为没信号。
+    const dimPickText = (rows, dim, flag) => {
+      const hit = rows.find(x => x[flag]);
+      if (hit) return hit.label;
+      const neg = validated.negativeLabels(dim);
+      const negHit = rows.find(x => neg.has(x.label));
+      if (negHit) return `${negHit.label}（反向信号，次日更容易绿）`;
+      // 没有冠军时把原因带上，别只写「暂无」
+      const set = flag === 'isBestRatio'
+        ? validated.rateEligibleLabels(dim)
+        : validated.avgEligibleLabels(dim);
+      const qualified = rows.filter(x => set.has(x.label));
+      if (qualified.length) {
+        const mx = Math.max(...qualified.map(x => x.sample_count));
+        return `${mx}次样本不足，暂无`;
+      }
+      return '该维度无稳定信号';
+    };
     const bestCondRatio = condStats.find(x => x.isBestRatio);
     const bestCondAvg = condStats.find(x => x.isBestAvg);
 
@@ -478,33 +545,76 @@ app.post('/api/statAnalyze', async (req, res) => {
 
     // 结论文案：没有达标层时给出可解释的兜底，而不是空白/N/A
     const pick = (rows, flag) => rows.find(x => x[flag]);
-    const noWinner = (rows) => {
+    // 找不到冠军时，必须说清「为什么」，三种原因要分清：
+    //   1) 数据缺失          —— 这个维度压根没数据
+    //   2) 跨股验证里没信号   —— 这个维度的层在 10 只股票上就没通过检验
+    //   3) 本股票样本不够     —— 跨股验证通过了，但在这只股票上只出现几次
+    const fallbackText = (rows, dim, which) => {
       const usable = rows.filter(x => !/缺失/.test(x.label));
       if (!usable.length) return '该维度数据缺失，无法给出结论';
-      const maxN = Math.max(...usable.map(x => x.sample_count));
-      return `样本不足（各层最多 ${maxN} 次，低于 10 次的统计意义有限），暂不给出结论`;
+      const set = which === 'rate'
+        ? validated.rateEligibleLabels(dim)
+        : validated.avgEligibleLabels(dim);
+      const qualified = usable.filter(x => set.has(x.label));
+      if (!qualified.length) {
+        // 该维度可能只有「反向信号」（如长下影），这时不能说「没信号」
+        if (which === 'rate' && validated.negativeLabels(dim).size) {
+          return '本维度只有反向信号（见后），没有验证过的正向信号';
+        }
+        return '该维度在10只股票3335个样本的跨股验证中未发现稳定信号，暂不给出结论';
+      }
+      // 层本身通过了跨股验证，但在本股票上样本量不够
+      // 要说清到底是「出现次数不够」还是「红盘次数不够」，不能笼统说「样本不足」
+      const totalNeeded = 10, redNeeded = 5;
+      const best = qualified.slice().sort((a, b) => b.sample_count - a.sample_count)[0];
+      const mxTotal = Math.max(...qualified.map(x => x.sample_count));
+      const mxRed = Math.max(...qualified.map(x => x.red_count));
+      if (mxTotal < totalNeeded) {
+        return `本股票该形态只出现 ${mxTotal} 次（需至少 ${totalNeeded} 次），样本不足暂不给出结论`;
+      }
+      if (mxRed < redNeeded) {
+        return `本股票该形态共出现 ${best.sample_count} 次，但其中红盘只有 ${mxRed} 次（需至少 ${redNeeded} 次红盘样本才能算均涨），样本不足暂不给出结论`;
+      }
+      return `本股票该形态出现 ${best.sample_count} 次、红盘 ${best.red_count} 次，仍未满足评选条件，暂不给出结论`;
     };
-    const conclusionText = (rows, dimName) => {
+    // 该维度有没有通过验证的反向信号（次日更容易绿），有就把「看空层」点出来
+    const negativeSignalText = (rows, dim) => {
+      const neg = validated.negativeLabels(dim);
+      const hit = neg.size ? rows.find(x => neg.has(x.label)) : null;
+      if (hit) {
+        return `反向信号（次日更容易绿）：${hit.label}（本股票层内红盘率仅 ${layerRate(hit)}%）`;
+      }
+      // 边缘显著的反向信号：方向一致但检验没过 0.05，只能作参考
+      const marg = validated.marginalNegativeLabels(dim);
+      const mHit = marg.size ? rows.find(x => marg.has(x.label)) : null;
+      if (mHit) {
+        return `边缘反向信号（仅供参考）：${mHit.label}（本股票层内红盘率 ${layerRate(mHit)}%）`;
+      }
+      return null;
+    };
+    const conclusionText = (rows, dim) => {
       const r = pick(rows, 'isBestRatio'), a = pick(rows, 'isBestAvg');
+      const negTxt = negativeSignalText(rows, dim);
       const ratioPart = r
         ? `【成功率最高】${r.label}（层内红盘率${layerRate(r)}%，${r.red_count}次）`
-        : `【成功率最高】${noWinner(rows)}`;
+        : `【成功率最高】${fallbackText(rows, dim, 'rate')}`;
       const avgPart = a
         ? `【涨幅最高】${a.label}（红盘均涨${a.red_avg}%）`
-        : `【涨幅最高】${noWinner(rows)}`;
-      return `${ratioPart}；${avgPart}`;
+        : `【涨幅最高】${fallbackText(rows, dim, 'avg')}`;
+      return `${ratioPart}；${avgPart}${negTxt ? `；${negTxt}` : ''}`;
     };
 
     const conclusions = {
-      vol: conclusionText(volStats),
-      ma5: conclusionText(ma5Stats),
-      ma20: conclusionText(ma20Stats),
-      dist: conclusionText(distStats),
-      vwap: conclusionText(vwapStats),
-      shape: conclusionText(shapeStats),
-      auc: conclusionText(aucStats),
-      cond: conclusionText(condStats),
-      overall: `综合来看，最优买入条件为【${bestCondAvg ? bestCondAvg.label : '暂无'}】，红盘均涨最高（${bestCondAvg ? bestCondAvg.red_avg : '0'}%）；若追求稳定则关注【${bestCondRatio ? bestCondRatio.label : '暂无'}】（层内红盘率${bestCondRatio ? layerRate(bestCondRatio) : '0'}%）。分时走势方面，收盘价与当日均价线的位置参考【${bestVwapRatio ? bestVwapRatio.label : '暂无'}】，日内形态参考【${bestShapeRatio ? bestShapeRatio.label : '暂无'}】；量能参考【${bestVolAvg ? bestVolAvg.label : '暂无'}】，5日线参考【${bestMa5Avg ? bestMa5Avg.label : '暂无'}】。`
+      vol: conclusionText(volStats, 'vol'),
+      ma5: conclusionText(ma5Stats, 'ma5'),
+      ma20: conclusionText(ma20Stats, 'ma20'),
+      dist: conclusionText(distStats, 'dist'),
+      vwap: conclusionText(vwapStats, 'vwap'),
+      shape: conclusionText(shapeStats, 'shape'),
+      auc: conclusionText(aucStats, 'auc'),
+      wick: conclusionText(wickStats, 'wick'),
+      cond: conclusionText(condStats, 'cond'),
+      overall: `综合来看，最优买入条件为【${bestCondAvg ? bestCondAvg.label : '暂无'}】，红盘均涨最高（${bestCondAvg ? bestCondAvg.red_avg : '0'}%）；若追求稳定则关注【${bestCondRatio ? bestCondRatio.label : '暂无'}】（层内红盘率${bestCondRatio ? layerRate(bestCondRatio) : '0'}%）。分时走势方面，日内形态最关键的是【${dimPickText(shapeStats, 'shape', 'isBestRatio')}】（层内红盘率${bestShapeRatio ? layerRate(bestShapeRatio) : '0'}%），收盘价与当日均价线的位置参考【${dimPickText(vwapStats, 'vwap', 'isBestRatio')}】，集合竞价量能参考【${dimPickText(aucStats, 'auc', 'isBestRatio')}】，长下影形态参考【${dimPickText(wickStats, 'wick', 'isBestRatio')}】；量能参考【${dimPickText(volStats, 'vol', 'isBestAvg')}】，5日线参考【${dimPickText(ma5Stats, 'ma5', 'isBestAvg')}】。注意：只有通过跨股票验证的层才会被标为「最高」，没验证过的维度会直说「无稳定信号」，不用单股噪声层充数。`
     };
 
     // Top10红盘样本
@@ -545,6 +655,7 @@ app.post('/api/statAnalyze', async (req, res) => {
         vwap_stats: vwapStats,
         shape_stats: shapeStats,
         auc_stats: aucStats,
+        wick_stats: wickStats,
         cond_stats: condStats,
         conclusions: conclusions,
         top10: top10.map(s => ({
@@ -557,6 +668,8 @@ app.post('/api/statAnalyze', async (req, res) => {
           turnover: s.turnoverRate == null || !isFinite(s.turnoverRate) ? '—' : s.turnoverRate.toFixed(1),
           vwap_diff: s.vwapDiff == null ? '—' : s.vwapDiff.toFixed(2),
           close_pos: s.closePos == null ? '—' : s.closePos.toFixed(0),
+          low_shadow: s.lowShadow == null ? '—' : s.lowShadow.toFixed(2),
+          auc_ratio: s.aucRatio == null ? '—' : s.aucRatio.toFixed(2),
         }))
       }
     });
