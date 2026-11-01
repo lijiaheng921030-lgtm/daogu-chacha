@@ -44,6 +44,13 @@ page {
   opacity: 0.85;
 }
 
+/* 主按钮禁用时（分析中）降低饱和度，给用户明确反馈 */
+.btn-primary[disabled] {
+  background: linear-gradient(135deg, #8A7428, #6E5D20);
+  color: #6E6E6E;
+  opacity: 0.8;
+}
+
 .input-wrap {
   background: #252525;
   border-radius: 16rpx;
@@ -68,7 +75,7 @@ page {
 }
 
 .input-field::placeholder {
-  color: #666666;
+  color: #8C8C8C;
 }
 
 .loading {
@@ -101,78 +108,15 @@ page {
 .error-msg {
   text-align: center;
   padding: 60rpx 0;
-  color: #E94560;
+  color: #FF7A8F;
   font-size: 28rpx;
+  line-height: 1.6;
 }
 
-.verdict-card {
-  border-radius: 20rpx;
-  padding: 40rpx 30rpx;
-  text-align: center;
-  margin-bottom: 24rpx;
-  border: 2rpx solid;
-}
-
-.verdict-A {
-  background: linear-gradient(135deg, rgba(233,69,96,0.15), rgba(233,69,96,0.05));
-  border-color: #E94560;
-}
-
-.verdict-B {
-  background: linear-gradient(135deg, rgba(15,157,88,0.15), rgba(15,157,88,0.05));
-  border-color: #0F9D58;
-}
-
-.verdict-C {
-  background: rgba(100,100,128,0.15);
-  border-color: #666666;
-}
-
-.verdict-label {
-  font-size: 24rpx;
-  color: #B0B0B0;
-  margin-bottom: 12rpx;
-}
-
-.verdict-text {
-  font-size: 48rpx;
-  font-weight: 800;
-}
-
-.verdict-A .verdict-text { color: #E94560; }
-.verdict-B .verdict-text { color: #0F9D58; }
-.verdict-C .verdict-text { color: #B0B0B0; }
-
-.verdict-sub {
-  font-size: 22rpx;
-  color: #666666;
-  margin-top: 12rpx;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20rpx;
-  margin-bottom: 20rpx;
-}
-
-.stat-item {
-  background: #1A1A1A;
-  border-radius: 12rpx;
-  padding: 20rpx;
-  text-align: center;
-}
-
-.stat-value {
-  font-size: 30rpx;
+/* 说明文字里的加粗片段（原来误用 <b> 标签，WXML 不支持 HTML 标签） */
+.hl {
   font-weight: 600;
-  color: #FFFFFF;
-  margin-bottom: 6rpx;
-}
-
-.stat-label {
-  font-size: 22rpx;
-  color: #666666;
+  color: #E8E8E8;
 }
 
 .stat-pill {
@@ -183,222 +127,8 @@ page {
   color: #B0B0B0;
 }
 
-.stat-pill.red { color: #E94560; }
-.stat-pill.green { color: #0F9D58; }
-
-.strategy-item {
-  display: flex;
-  align-items: flex-start;
-  padding: 20rpx 0;
-  border-bottom: 1rpx solid #3A3A3A;
-}
-
-.strategy-item:last-child {
-  border-bottom: none;
-}
-
-.strategy-rank {
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24rpx;
-  font-weight: 700;
-  margin-right: 16rpx;
-  flex-shrink: 0;
-}
-
-.rank-1 { background: #D4AF37; color: #1A1A1A; }
-.rank-2 { background: #C0C0C0; color: #1A1A1A; }
-.rank-3 { background: #CD7F32; color: #FFFFFF; }
-
-.strategy-header {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-bottom: 12rpx;
-}
-
-.strategy-cond {
-  font-size: 26rpx;
-  color: #E0E0E0;
-}
-
-.strategy-metrics {
-  display: flex;
-  gap: 20rpx;
-}
-
-.metric {
-  text-align: center;
-}
-
-.metric-val {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #E0E0E0;
-}
-
-.metric.highlight .metric-val {
-  color: #D4AF37;
-}
-
-.metric-label {
-  display: block;
-  font-size: 20rpx;
-  color: #666666;
-}
-
-.exec-section {
-  margin-bottom: 20rpx;
-}
-
-.exec-section:last-child {
-  margin-bottom: 0;
-}
-
-.exec-title {
-  font-size: 26rpx;
-  color: #D4AF37;
-  margin-bottom: 8rpx;
-  font-weight: 600;
-}
-
-.exec-text {
-  font-size: 25rpx;
-  color: #B0B0B0;
-  line-height: 1.7;
-}
-
-.dow-grid {
-  display: flex;
-  gap: 12rpx;
-}
-
-.dow-item {
-  flex: 1;
-  background: #1A1A1A;
-  border-radius: 12rpx;
-  padding: 16rpx 8rpx;
-  text-align: center;
-}
-
-.dow-name {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #FFFFFF;
-  margin-bottom: 8rpx;
-}
-
-.dow-mean {
-  font-size: 20rpx;
-  color: #B0B0B0;
-}
-
-.dow-max {
-  font-size: 20rpx;
-  color: #0F9D58;
-}
-
-.dim-tag {
-  display: inline-block;
-  padding: 4rpx 12rpx;
-  border-radius: 6rpx;
-  font-size: 20rpx;
-  background: rgba(212, 175, 55, 0.2);
-  color: #D4AF37;
-}
-
-.dim-table {
-  width: 100%;
-  font-size: 24rpx;
-}
-
-.dim-table th {
-  background: #1A1A1A;
-  color: #666666;
-  padding: 14rpx 8rpx;
-  text-align: left;
-  font-weight: normal;
-}
-
-.dim-table td {
-  padding: 14rpx 8rpx;
-  border-top: 1rpx solid #3A3A3A;
-  color: #E0E0E0;
-}
-
-.dim-table .val {
-  color: #D4AF37;
-  font-weight: 600;
-}
-
-.tag-zhuichang {
-  background: rgba(233, 69, 96, 0.2);
-  color: #E94560;
-}
-
-.tag-dixi {
-  background: rgba(15, 157, 88, 0.2);
-  color: #0F9D58;
-}
-
-.tag {
-  display: inline-block;
-  padding: 4rpx 12rpx;
-  border-radius: 6rpx;
-  font-size: 20rpx;
-}
-
-.stock-info {
-  text-align: center;
-  padding: 30rpx 0 20rpx;
-}
-
-.stock-name {
-  font-size: 40rpx;
-  font-weight: 700;
-  color: #FFFFFF;
-}
-
-.stock-code {
-  font-size: 24rpx;
-  color: #666666;
-  margin-top: 4rpx;
-}
-
-.stat-days-tag {
-  display: inline-block;
-  margin-top: 8rpx;
-  padding: 4rpx 16rpx;
-  background: rgba(212, 175, 55, 0.15);
-  border-radius: 20rpx;
-  font-size: 22rpx;
-  color: #D4AF37;
-}
-
-.data-range-tag {
-  display: inline-block;
-  margin-top: 6rpx;
-  padding: 4rpx 16rpx;
-  background: rgba(100, 100, 128, 0.2);
-  border-radius: 20rpx;
-  font-size: 22rpx;
-  color: #888888;
-}
-
-.stale-warning {
-  margin-top: 10rpx;
-  padding: 8rpx 16rpx;
-  background: rgba(233, 69, 96, 0.15);
-  border-radius: 10rpx;
-  font-size: 22rpx;
-  color: #E94560;
-  text-align: center;
-}
+.stat-pill.red { color: #FF7A8F; }
+.stat-pill.green { color: #4ADE80; }
 
 .stat-section {
   margin-bottom: 24rpx;
@@ -417,7 +147,7 @@ page {
 
 .stat-note {
   font-size: 22rpx;
-  color: #777777;
+  color: #8C8C8C;
   line-height: 1.6;
   margin-bottom: 12rpx;
   padding: 10rpx 14rpx;
@@ -431,11 +161,15 @@ page {
   white-space: nowrap;
 }
 
+/* 表格实际所需宽度 = 标签列 220rpx + 固定列 (68+76+96+68+76+88=472rpx)
+   + 行内边距 32rpx = 724rpx。标签列是 flex:1，会吸收剩余空间，
+   但固定列不能被压缩，所以基准宽度必须 ≥ 固定列 + 标签列最小宽 + 内边距，
+   取 820rpx 留出余量，避免文字被压扁换行。 */
 .stat-table {
   background: #1A1A1A;
   border-radius: 12rpx;
   overflow: hidden;
-  min-width: 720rpx;
+  min-width: 820rpx;
 }
 
 .stat-table-header {
@@ -443,7 +177,7 @@ page {
   padding: 14rpx 16rpx;
   background: #2A2A2A;
   font-size: 22rpx;
-  color: #666666;
+  color: #8C8C8C;
 }
 
 .stat-table-row {
@@ -460,7 +194,6 @@ page {
   white-space: normal;
   line-height: 1.4;
 }
-
 .col-label.highlight-ratio {
   color: #D4AF37;
 }
@@ -469,34 +202,42 @@ page {
   color: #FF8C00;
 }
 
+/* 各列宽度：需容纳表头文字（"红成功率"4字 @22rpx 约需 90rpx），
+   否则表头文字会被压扁换行、上下行错位。
+   flex-shrink:0 是关键 —— 不加的话 flex 布局会重新分配列宽，
+   导致表头行和数据行的列宽对不上（实测 23px vs 13px）。 */
 .col-count {
-  width: 60rpx;
+  width: 68rpx;
+  flex-shrink: 0;
   text-align: center;
 }
 
 .col-ratio {
-  width: 70rpx;
+  width: 76rpx;
+  flex-shrink: 0;
   text-align: center;
 }
 
 .col-rate {
-  width: 80rpx;
+  width: 96rpx;
+  flex-shrink: 0;
   text-align: center;
 }
 
 .col-avg {
-  width: 80rpx;
+  width: 88rpx;
+  flex-shrink: 0;
   text-align: center;
 }
-
-.col-label.cond-label {
+/* 综合条件表的标签更长，需要更宽的列 */
+.col-label-wide {
   flex: 2;
   min-width: 280rpx;
 }
 
-.red { color: #E94560; }
-.red-bold { color: #E94560; font-weight: 700; }
-.green { color: #0F9D58; }
+.red { color: #FF7A8F; }
+.red-bold { color: #FF7A8F; font-weight: 700; }
+.green { color: #4ADE80; }
 .bold { font-weight: 700; }
 
 /* 分层旁的信号标记：✅已验证（跨股票检验通过的正/反向信号） ⚠反向（看空信号） */
@@ -524,9 +265,64 @@ page {
   color: #D4AF37;
 }
 
+/* 验证统计量：把 ✅已验证 展开成可核对的数据
+   （p 值、z 值、10 只股票里几只方向一致），
+   让用户能自己判断这是不是噪声，而不是只能选择信或不信。
+   放在表格下方独立展示，不挤进 220rpx 宽的标签列。 */
+.verify-block {
+  margin-top: 12rpx;
+  padding: 14rpx 16rpx;
+  background: rgba(100, 100, 128, 0.1);
+  border-radius: 8rpx;
+}
+
+.verify-title {
+  font-size: 20rpx;
+  color: #8C8C8C;
+  margin-bottom: 10rpx;
+}
+
+.verify-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 6rpx 0;
+}
+
+.verify-left {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.verify-left .sig-tag {
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
+.verify-label {
+  font-size: 21rpx;
+  color: #E0E0E0;
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
+}
+
+.verify-stats {
+  font-size: 20rpx;
+  color: #8C8C8C;
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-align: right;
+}
+
 .legend-row {
   display: flex;
-  gap: 30rpx;
+  flex-wrap: wrap;
+  gap: 20rpx 30rpx;
   margin-top: 16rpx;
   padding: 0 8rpx;
 }
@@ -536,13 +332,14 @@ page {
   align-items: center;
   gap: 8rpx;
   font-size: 22rpx;
-  color: #888888;
+  color: #8C8C8C;
 }
 
 .legend-dot {
   width: 16rpx;
   height: 16rpx;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .ratio-dot {
@@ -589,7 +386,7 @@ page {
 
 .cond-count {
   font-size: 22rpx;
-  color: #666666;
+  color: #8C8C8C;
 }
 
 .cond-avg {
@@ -599,13 +396,14 @@ page {
 }
 
 .cond-avg.red {
-  color: #E94560;
+  color: #FF7A8F;
 }
 
 .top10-list {
   background: #1A1A1A;
   border-radius: 12rpx;
   overflow: hidden;
+  min-width: 980rpx;
 }
 
 .top10-header {
@@ -613,7 +411,7 @@ page {
   padding: 14rpx 16rpx;
   background: #2A2A2A;
   font-size: 22rpx;
-  color: #666666;
+  color: #8C8C8C;
 }
 
 .top10-row {
@@ -626,42 +424,65 @@ page {
 
 .col-date {
   width: 130rpx;
+  flex-shrink: 0;
   color: #B0B0B0;
 }
 
+/* 「-3.21%→5.67%」需要约 180rpx，窄了会被截断 */
 .col-pct {
   flex: 1;
-  min-width: 130rpx;
+  min-width: 180rpx;
 }
 
 .col-pct.red {
-  color: #E94560;
+  color: #FF7A8F;
   font-weight: 600;
 }
 
+/* 「0.64/-6.20%/-9.40%」需要约 200rpx */
 .col-other {
-  width: 180rpx;
+  width: 200rpx;
+  flex-shrink: 0;
   text-align: right;
-  color: #666666;
+  color: #8C8C8C;
   font-size: 20rpx;
 }
 
 .col-other2 {
-  width: 150rpx;
+  width: 140rpx;
+  flex-shrink: 0;
   text-align: right;
-  color: #8A7A3A;
+  color: #B59B4A;
+  font-size: 20rpx;
+}
+
+/* 下影线 / 竞价量比：对应已验证的看空⑩、看多⑨信号 */
+.col-other3 {
+  width: 140rpx;
+  flex-shrink: 0;
+  text-align: right;
+  color: #8C8C8C;
+  font-size: 20rpx;
+}
+
+/* 日内形态 */
+.col-other4 {
+  width: 170rpx;
+  flex-shrink: 0;
+  text-align: right;
+  color: #6FA0D6;
   font-size: 20rpx;
 }
 
 /* Top10 里的日内形态标签 */
 .fenshi-tag {
-  color: #4A7FB5;
+  color: #6FA0D6;
   font-size: 18rpx;
 }
 
 .risk-tip {
   font-size: 22rpx;
-  color: #666666;
+  color: #8C8C8C;
   line-height: 1.7;
 }
 
@@ -686,7 +507,7 @@ page {
 }
 
 .picker-arrow {
-  color: #666666;
+  color: #8C8C8C;
   font-size: 20rpx;
 }
 
@@ -697,6 +518,7 @@ page {
   border-radius: 8rpx;
   font-size: 24rpx;
   color: #D4AF37;
+  line-height: 1.6;
 }
 
 .overall-conclusion {
@@ -718,4 +540,45 @@ page {
   font-size: 26rpx;
   color: #E0E0E0;
   line-height: 1.6;
+}
+
+/* 结果页底部操作区 */
+.footer-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 30rpx;
+}
+
+.btn-secondary,
+.btn-share {
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: 50rpx;
+  margin: 0;
+  padding: 0;
+}
+
+.btn-secondary {
+  background: #252525;
+  color: #E0E0E0;
+  border: 1rpx solid #3A3A3A;
+}
+
+.btn-secondary::after,
+.btn-share::after {
+  border: none;
+}
+
+.btn-share {
+  background: linear-gradient(135deg, #D4AF37, #B8962E);
+  color: #1A1A1A;
+  border: none;
+}
+
+.btn-secondary:active,
+.btn-share:active {
+  opacity: 0.85;
 }

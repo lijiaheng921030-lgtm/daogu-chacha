@@ -1,9 +1,9 @@
 {
   "libVersion": "3.17.3",
-  "projectname": "%E7%A8%BB%E8%B0%B7%E6%9F%A5%E6%9F%A5v1.0.2",
+  "projectname": "%E7%A8%BB%E8%B0%B7%E6%9F%A5%E6%9F%A5",
   "condition": {},
   "setting": {
-    "urlCheck": false,
+    "urlCheck": true,
     "coverView": true,
     "lazyloadPlaceholderEnable": false,
     "skylineRenderEnable": false,

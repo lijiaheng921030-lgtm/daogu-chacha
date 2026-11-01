@@ -11,6 +11,26 @@
     "backgroundColor": "#1A1A1A",
     "backgroundTextStyle": "dark"
   },
+  "tabBar": {
+    "color": "#8C8C8C",
+    "selectedColor": "#D4AF37",
+    "backgroundColor": "#1A1A1A",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "查个股",
+        "iconPath": "images/tab_home.png",
+        "selectedIconPath": "images/tab_home_on.png"
+      },
+      {
+        "pagePath": "pages/history/history",
+        "text": "历史记录",
+        "iconPath": "images/tab_history.png",
+        "selectedIconPath": "images/tab_history_on.png"
+      }
+    ]
+  },
   "style": "v2",
   "sitemapLocation": "sitemap.json"
 }

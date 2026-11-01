@@ -4,3 +4,12 @@ _research/
 temp_kline.csv
 .wrangler/
 .cache/
+
+# 临时预览产物（render-preview.js 生成，不应入库）
+.tmp_*.html
+.tmp_*.json
+.tmp_*.txt
+.tmp_*.png
+
+# WorkBuddy 工作区数据
+.workbuddy/

@@ -1,18 +1,13 @@
+const historyStore = require('../../utils/history');
+const { enrichReport } = require('../../utils/report');
+
 Page({
   data: {
     report: null,
     stock_name: '',
     stock_code: '',
-    // 统计表有 8 列，屏幕放不下，横向滚动；表头和所有数据表共用同一个 scrollLeft 保证列对齐
-    tblScroll: 0,
-  },
-
-  onTblScroll(e) {
-    const x = e.detail.scrollLeft;
-    // 只在变化足够大时回写，避免 setData → scroll-left → scroll 事件的回环
-    if (Math.abs(x - this.data.tblScroll) > 1) {
-      this.setData({ tblScroll: x });
-    }
+    // 报告加载失败时的兜底提示
+    loadFailed: false,
   },
 
   onLoad(options) {
@@ -26,8 +21,10 @@ Page({
       }
       if (report && typeof report === 'object') {
         this.applyReport(report);
-        // 缓存用完即清，避免占满本地空间
-        try { wx.removeStorageSync(options.key); } catch (e) {}
+        // 注意：这里不能删缓存。
+        // 报告缓存与历史记录条目共享同一份数据（daogu_report_<ts>），
+        // 删掉会导致「历史记录」里再点开这条时报告已失效。
+        // 孤儿缓存由 utils/history.js 的 cleanOrphanReports() 统一清理。
         return;
       }
     }
@@ -42,8 +39,10 @@ Page({
         return;
       }
       console.error('解析报告数据失败');
-      wx.showToast({ title: '数据解析失败', icon: 'none' });
     }
+
+    // 走到这里说明既没拿到缓存也没拿到 query 数据，不能一直停在 loading
+    this.setData({ loadFailed: true });
   },
 
   // 依次尝试：直接解析 → 解码一次 → 解码两次
@@ -69,13 +68,46 @@ Page({
 
   applyReport(report) {
     this.setData({
-      report: report,
+      report: enrichReport(report),
       stock_name: report.stock_name || '未知股票',
       stock_code: report.stock_code || '',
+      loadFailed: false,
     });
   },
 
+  // 分享给好友/转发到会话
+  onShareAppMessage() {
+    const r = this.data.report;
+    const name = (r && r.stock_name) || '个股';
+    const headline = (r && r.headline) || '次日红绿盘统计分析';
+    return {
+      title: `${name}｜${headline}`,
+      path: '/pages/index/index',
+      imageUrl: '/images/rice.png'
+    };
+  },
+
+  // 分享到朋友圈
+  onShareTimeline() {
+    const r = this.data.report;
+    const name = (r && r.stock_name) || '个股';
+    return {
+      title: `稻谷查查：${name} 次日红绿盘统计分析`,
+      query: '',
+      imageUrl: '/images/rice.png'
+    };
+  },
+
   goBack() {
-    wx.navigateBack();
+    wx.navigateBack({
+      fail: () => {
+        // 结果页可能被直接打开（没有上一页栈），回退到首页
+        wx.switchTab({ url: '/pages/index/index' });
+      }
+    });
+  },
+
+  goHome() {
+    wx.switchTab({ url: '/pages/index/index' });
   }
 });

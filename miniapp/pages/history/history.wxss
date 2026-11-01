@@ -3,14 +3,27 @@
   font-weight: 700;
   color: #FFFFFF;
   text-align: center;
-  padding: 30rpx 0 40rpx;
+  padding: 30rpx 0 10rpx;
+}
+
+.page-sub {
+  text-align: center;
+  color: #8C8C8C;
+  font-size: 22rpx;
+  padding-bottom: 20rpx;
 }
 
 .empty-tip {
   text-align: center;
-  color: #666666;
+  color: #8C8C8C;
   font-size: 28rpx;
   padding: 100rpx 0;
+}
+
+.empty-sub {
+  font-size: 24rpx;
+  color: #6E6E6E;
+  margin-top: 16rpx;
 }
 
 .history-list {
@@ -23,12 +36,17 @@
   justify-content: space-between;
   background: #252525;
   border-radius: 16rpx;
-  padding: 30rpx;
+  padding: 24rpx 24rpx 24rpx 30rpx;
   margin-bottom: 16rpx;
+}
+
+.history-item:active {
+  background: #2E2E2E;
 }
 
 .history-left {
   flex: 1;
+  min-width: 0;
 }
 
 .history-name {
@@ -38,9 +56,39 @@
   margin-bottom: 6rpx;
 }
 
+.history-meta {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.history-code {
+  font-size: 22rpx;
+  color: #D4AF37;
+  background: rgba(212, 175, 55, 0.15);
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+}
+
 .history-date {
   font-size: 22rpx;
-  color: #666666;
+  color: #8C8C8C;
+}
+
+.history-detail {
+  font-size: 22rpx;
+  color: #8C8C8C;
+  line-height: 1.5;
+  margin-top: 10rpx;
+}
+
+.history-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14rpx;
+  flex-shrink: 0;
+  margin-left: 20rpx;
 }
 
 .verdict-badge {
@@ -50,14 +98,27 @@
   font-weight: 600;
 }
 
-.verdict-A { background: rgba(233,69,96,0.2); color: #E94560; }
-.verdict-B { background: rgba(15,157,88,0.2); color: #0F9D58; }
-.verdict-C { background: rgba(100,100,128,0.2); color: #B0B0B0; }
+.verdict-A { background: rgba(233,69,96,0.2); color: #FF7A8F; }
+.verdict-B { background: rgba(15,157,88,0.2); color: #4ADE80; }
+.verdict-C { background: rgba(140,140,140,0.18); color: #B0B0B0; }
+
+.history-del {
+  font-size: 22rpx;
+  color: #8C8C8C;
+  padding: 4rpx 16rpx;
+  border: 1rpx solid #3A3A3A;
+  border-radius: 20rpx;
+}
+
+.history-del:active {
+  color: #E94560;
+  border-color: #E94560;
+}
 
 .btn-clear {
   background: transparent;
   border: 1rpx solid #3A3A3A;
-  color: #666666;
+  color: #8C8C8C;
   font-size: 26rpx;
   border-radius: 40rpx;
   height: 80rpx;

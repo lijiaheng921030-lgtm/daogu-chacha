@@ -1,5 +1,5 @@
 {
-  "description": "稻谷查查1.0 - 个股综合分析小程序",
+  "description": "稻谷查查 - 个股次日红绿盘统计分析小程序",
   "packOptions": {
     "ignore": [],
     "include": []
@@ -7,7 +7,7 @@
   "setting": {
     "bundle": false,
     "userConfirmedBundleSwitch": false,
-    "urlCheck": false,
+    "urlCheck": true,
     "scopeDataCheck": false,
     "coverView": true,
     "es6": true,
@@ -45,7 +45,7 @@
     "condition": false
   },
   "compileType": "miniprogram",
-  "libVersion": "2.19.0",
+  "libVersion": "3.17.3",
   "appid": "wx4fae3c135a32c1cc",
   "projectname": "daogu_chacha",
   "condition": {},

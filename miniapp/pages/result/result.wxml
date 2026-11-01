@@ -1,3 +1,56 @@
+<!--
+  统计表模板：11 个维度表结构完全一致（8 列），抽成模板复用。
+  表头与数据放在同一个 scroll-view 里，横向滚动时天然对齐，
+  不需要跨表同步 scrollLeft，也就不需要滚动时高频 setData。
+
+  验证统计量（p 值、z 值、方向一致数）不塞进标签列 ——
+  标签列只有 220rpx 宽，塞进去会换行成 3 行、把表格行高撑得参差不齐。
+  改为收集到 verified 数组，在表格下方单独一块展示。
+-->
+<template name="statTable">
+  <scroll-view class="table-scroll" scroll-x="{{true}}">
+    <view class="stat-table">
+      <view class="stat-table-header">
+        <text class="col-label {{wide ? 'col-label-wide' : ''}}"></text>
+        <text class="col-count">红次</text>
+        <text class="col-ratio">红占比</text>
+        <text class="col-rate">红成功率</text>
+        <text class="col-avg">红均涨</text>
+        <text class="col-count">绿次</text>
+        <text class="col-ratio">绿占比</text>
+        <text class="col-avg">绿均跌</text>
+      </view>
+      <view class="stat-table-row" wx:for="{{rows}}" wx:key="label">
+        <text class="col-label {{wide ? 'col-label-wide' : ''}} {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
+        <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
+        <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
+        <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
+        <text class="col-avg {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_avg}}%</text>
+        <text class="col-count green">{{item.green_count}}</text>
+        <text class="col-ratio green">{{item.green_ratio}}%</text>
+        <text class="col-avg green">{{item.green_avg}}%</text>
+      </view>
+    </view>
+  </scroll-view>
+</template>
+
+<!--
+  验证明细块：把该维度里通过跨股票验证的层单独列出来，
+  附上 p 值、z 值、方向一致的股票数，方便用户核对「不是噪声」。
+-->
+<template name="verifyBlock">
+  <view class="verify-block" wx:if="{{verified.length > 0}}">
+    <view class="verify-title">本维度已验证的层（可核对统计量）</view>
+    <view class="verify-item" wx:for="{{verified}}" wx:key="label">
+      <view class="verify-left">
+        <text class="sig-tag {{item.marginal ? 'sig-marg' : (item.dir === 'neg' ? 'sig-neg' : 'sig-pos')}}">{{item.marginal ? '⚠边缘' : (item.dir === 'neg' ? '⚠反向' : '✅已验证')}}</text>
+        <text class="verify-label">{{item.label}}</text>
+      </view>
+      <text class="verify-stats">{{item.v_text}}</text>
+    </view>
+  </view>
+</template>
+
 <view class="container">
   <!-- 股票信息 -->
   <view class="stock-info">
@@ -9,246 +62,125 @@
   </view>
 
   <!-- 加载中 -->
-  <view class="loading" wx:if="{{!report}}">
+  <view class="loading" wx:if="{{!report && !loadFailed}}">
     <view class="loading-spinner"></view>
     <view class="loading-text">正在分析数据...</view>
+  </view>
+
+  <!-- 报告获取失败 -->
+  <view class="card load-failed" wx:if="{{loadFailed}}">
+    <view class="section-title">报告加载失败</view>
+    <view class="stat-note">分析结果可能已过期或被清理，请返回首页重新查询。</view>
+    <button class="btn-primary" bindtap="goHome" style="margin-top:20rpx;">返回首页</button>
   </view>
 
   <block wx:if="{{report}}">
     <!-- 统计分析 -->
     <view class="card">
       <view class="section-title">📊 次日红绿盘前日统计分析</view>
-      <view class="stat-note">说明：⑥⑦⑧⑨ 用的是「当日均价线（VWAP）+ 日内K线形态 + 集合竞价 + 长下影」这四个可得的盘口/日线衍生数据；⑩ 是<b>真实的日内走势形态</b>——用 BaoStock 的 5 分钟线（每个交易日 48 根）把当天走势分成 7 种形态。</view>
+      <view class="stat-note">说明：⑥⑦⑧⑨ 用的是「当日均价线（VWAP）+ 日内K线形态 + 集合竞价 + 长下影」这四个可得的盘口/日线衍生数据；⑩ 是<text class="hl">真实的日内走势形态</text>——用 BaoStock 的 5 分钟线（每个交易日 48 根）把当天走势分成 7 种形态。</view>
       <view class="stat-note">口径：「红占比」＝该层红盘次数占全部样本的比例；「红成功率」＝该层内红盘次数÷该层总次数，才是真正的成功率。先看「红成功率」，「红占比」只说明这种形态出现得多不多。</view>
-      <view class="stat-note"><b>只看打✅的层：</b>每个分层旁边标了 ✅已验证 / ⚠反向 的，是这个形态在 10 只股票、3335 个样本上做过跨股票检验的结果（p&lt;0.05 且多数股票方向一致）。<b>没有标记的层都是单只股票上的噪声</b>——120 天样本很容易把随机波动选成「最佳」，所以只有通过跨股票验证的层才会被标为「成功率最高 / 涨幅最高」，没通过的维度会直接写「未发现稳定信号」，不会拿噪声层充数。表格可左右滑动查看完整列。</view>
-
-      <!-- 表头（与下方表格横向滚动同步） -->
-      <view class="stat-section">
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-header">
-            <text class="col-label"></text>
-            <text class="col-count">红次</text>
-            <text class="col-ratio">红占比</text>
-            <text class="col-rate">红成功率</text>
-            <text class="col-avg">红均涨</text>
-            <text class="col-count">绿次</text>
-            <text class="col-ratio">绿占比</text>
-            <text class="col-avg">绿均跌</text>
-          </view>
-        </view>
-        </scroll-view>
-      </view>
+      <view class="stat-note"><text class="hl">只看打✅的层：</text>每个分层旁边标了 ✅已验证 / ⚠反向 的，是这个形态在 10 只股票、3335 个样本上做过跨股票检验的结果（p&lt;0.05 且多数股票方向一致）。<text class="hl">没有标记的层都是单只股票上的噪声</text>——120 天样本很容易把随机波动选成「最佳」，所以只有通过跨股票验证的层才会被标为「成功率最高 / 涨幅最高」，没通过的维度会直接写「未发现稳定信号」，不会拿噪声层充数。表格可左右滑动查看完整列。</view>
 
       <!-- 1. 量比分层 -->
       <view class="stat-section">
         <view class="stat-title">① 按量比分层</view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.vol_stats}}" wx:key="index">
-            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <template is="statTable" data="{{rows: report.vol_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.vol_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.vol}}</view>
       </view>
 
-      <!-- 2. MA5分层 -->
+      <!-- 2. 换手率分层 -->
       <view class="stat-section">
-        <view class="stat-title">② 按收盘vs 5日线分层</view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.ma5_stats}}" wx:key="index">
-            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <view class="stat-title">② 按换手率分层</view>
+        <view class="stat-note">换手率来自 Tushare daily_basic 的真实值，取不到就整层显示「换手率数据缺失」，不做任何伪造。本维度<text class="hl">未做跨股票验证</text>——各股流通盘不同，换手率口径无法跨股比较，所以只在本股历史内看分布，不标 ✅/⚠，不评选「成功率最高」。</view>
+        <template is="statTable" data="{{rows: report.turn_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.turn_stats_verified}}" />
+        <view class="stat-conclusion">结论：{{report.conclusions.turn}}</view>
+      </view>
+
+      <!-- 3. MA5分层 -->
+      <view class="stat-section">
+        <view class="stat-title">③ 按收盘vs 5日线分层</view>
+        <template is="statTable" data="{{rows: report.ma5_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.ma5_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.ma5}}</view>
       </view>
 
-      <!-- 3. MA20分层 -->
+      <!-- 4. MA20分层 -->
       <view class="stat-section">
-        <view class="stat-title">③ 按收盘vs 20日线分层</view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.ma20_stats}}" wx:key="index">
-            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <view class="stat-title">④ 按收盘vs 20日线分层</view>
+        <template is="statTable" data="{{rows: report.ma20_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.ma20_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.ma20}}</view>
       </view>
 
-      <!-- 4. 前日涨跌幅分布 -->
+      <!-- 5. 前日涨跌幅分布 -->
       <view class="stat-section">
-        <view class="stat-title">④ 前日涨跌幅分布</view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.dist_stats}}" wx:key="index">
-            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <view class="stat-title">⑤ 前日涨跌幅分布</view>
+        <template is="statTable" data="{{rows: report.dist_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.dist_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.dist}}</view>
       </view>
 
-      <!-- 5. 综合条件 -->
+      <!-- 6. 综合条件 -->
       <view class="stat-section">
-        <view class="stat-title">⑤ 综合条件分析</view>
+        <view class="stat-title">⑥ 综合条件分析</view>
         <view class="stat-note">把前面几个条件组合起来看哪一类形态次日更容易红。✅ 跨股票验证后最稳的几条：「收盘价跌破均价线 + 收在日内最低位 + 缩量」红盘率 61.2%（z=4.00，10 只股票里 9 只方向一致）；「集合竞价温和放量（1.2~2.5倍）+ 当日缩量」红盘率 58.7%（z=3.97，8 只股票方向一致）；「收盘价跌破当日均价线 + 缩量 + 股价在5日线下方」红盘率 56.2%（高 8.7 个百分点，p=0.0015，9 只方向一致）。下面每一行都是在这只股票自己的历史里统计的，样本少时会标注 n 值，请结合 n 一起看。</view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.cond_stats}}" wx:key="index">
-            <text class="col-label cond-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <template is="statTable" data="{{rows: report.cond_stats, wide: true}}" />
+        <template is="verifyBlock" data="{{verified: report.cond_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.cond}}</view>
       </view>
 
       <!-- 6. 分时走势：收盘价 vs 当日均价线 -->
       <view class="stat-section">
-        <view class="stat-title">⑥ 分时走势：收盘价 vs 当日均价线</view>
+        <view class="stat-title">⑦ 分时走势：收盘价 vs 当日均价线</view>
         <view class="stat-note">当日均价线 = 当天所有成交的平均成本（分时图上那条黄线）。收盘价在均价线下方，说明当天买盘没能把价格顶上去，属于尾盘偏弱。✅ 本项已用 10 只股票、3335 个样本验证过：「收盘价低于当日均价线0.5%以上」次日红盘率 51.8%（比基准高 4.2 个百分点，10 只股票里 9 只方向一致，股票级重采样 100% 复现）。</view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.vwap_stats}}" wx:key="index">
-            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <template is="statTable" data="{{rows: report.vwap_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.vwap_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.vwap}}</view>
       </view>
 
       <!-- 7. 分时走势：日内K线形态 -->
       <view class="stat-section">
-        <view class="stat-title">⑦ 分时走势：日内K线形态（收盘位置 × 均价线）</view>
-        <view class="stat-note">看当天价格走的形态：收盘价落在当天最高价和最低价之间的什么位置（收盘位置），以及收盘价在不在当日均价线上方。因为这两项高度相关（相关系数 0.90），拆成两个独立分层会重复计票，所以这里做成<b>交叉分档</b>。✅ 已验证：「A 弱势收盘（收在日内最低位且破均价线）」是全表统计最稳的一层——层内红盘率 55.4%，比基准高 8.8 个百分点（p=0.0015），10 只股票里 9 只方向一致，股票级重采样 100% 复现。⚠️ 「D 强势收盘」侧 9/10 只股票方向为负，但只在 p=0.08 边缘，只作参考、不能当结论。</view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.shape_stats}}" wx:key="index">
-            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <view class="stat-title">⑧ 分时走势：日内K线形态（收盘位置 × 均价线）</view>
+        <view class="stat-note">看当天价格走的形态：收盘价落在当天最高价和最低价之间的什么位置（收盘位置），以及收盘价在不在当日均价线上方。因为这两项高度相关（相关系数 0.90），拆成两个独立分层会重复计票，所以这里做成<text class="hl">交叉分档</text>。✅ 已验证：「A 弱势收盘（收在日内最低位且破均价线）」是全表统计最稳的一层——层内红盘率 55.4%，比基准高 8.8 个百分点（p=0.0015），10 只股票里 9 只方向一致，股票级重采样 100% 复现。⚠️ 「D 强势收盘」侧 9/10 只股票方向为负，但只在 p=0.08 边缘，只作参考、不能当结论。</view>
+        <template is="statTable" data="{{rows: report.shape_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.shape_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.shape}}</view>
       </view>
 
       <!-- 8. 分时走势：开盘集合竞价 -->
       <view class="stat-section">
-        <view class="stat-title">⑧ 分时走势：开盘集合竞价</view>
-        <view class="stat-note">开盘前集合竞价的成交量，和最近5天「竞价」平均量比（同为「股」为单位，口径已校正；竞价量为0的异常日已剔除，有效历史不足3天判为缺失）。✅ 已验证：「竞价温和放量（1.2~2.5倍）」层内红盘率 53.2%，比基准高 7.2 个百分点（z=3.39，p=0.0007），10 只股票里 8 只方向一致，股票级重采样 100% 复现；控制当日涨跌幅和量比之后仍然成立。此前显示「未通过显著性检验」，是因为把 1.2~2.5 倍和 ≥2.5 倍混成「放量」一档，把信号稀释掉了——分成 4 档后才显出来。<b>「竞价过度放量（≥2.5倍）」反而没有预测力</b>（46.5%，方向不一致），放量过头不是好信号。</view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.auc_stats}}" wx:key="index">
-            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <view class="stat-title">⑨ 分时走势：开盘集合竞价</view>
+        <view class="stat-note">开盘前集合竞价的成交量，和最近5天「竞价」平均量比（同为「股」为单位，口径已校正；竞价量为0的异常日已剔除，有效历史不足3天判为缺失）。✅ 已验证：「竞价温和放量（1.2~2.5倍）」层内红盘率 53.2%，比基准高 7.2 个百分点（z=3.39，p=0.0007），10 只股票里 8 只方向一致，股票级重采样 100% 复现；控制当日涨跌幅和量比之后仍然成立。此前显示「未通过显著性检验」，是因为把 1.2~2.5 倍和 ≥2.5 倍混成「放量」一档，把信号稀释掉了——分成 4 档后才显出来。<text class="hl">「竞价过度放量（≥2.5倍）」反而没有预测力</text>（46.5%，方向不一致），放量过头不是好信号。</view>
+        <template is="statTable" data="{{rows: report.auc_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.auc_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.auc}}</view>
       </view>
 
       <!-- 9. 分时走势：长下影 -->
       <view class="stat-section">
-        <view class="stat-title">⑨ 分时走势：长下影（盘中杀跌后拉回）</view>
-        <view class="stat-note">当天最低价明显低于收盘价和开盘价，说明盘中砸下去又被拉回来——接盘资金托住了。⚠️ 这是分时走势里<b>唯一稳定的看空形态</b>：「下影线&gt;1.5%」次日红盘率只有 40.5%，比基准低 8.0 个百分点（z=-3.08，p=0.002），10 只股票里 8 只方向全部为负，股票级重采样复现率 0%（负向极稳）；再叠加「股价在5日线下方」时只有 38.4%（低 9.7 个百分点）。<b>看到长下影要提高警惕，别急着抄底。</b></view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.wick_stats}}" wx:key="index">
-            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <view class="stat-title">⑩ 分时走势：长下影（盘中杀跌后拉回）</view>
+        <view class="stat-note">当天最低价明显低于收盘价和开盘价，说明盘中砸下去又被拉回来——接盘资金托住了。⚠️ 这是分时走势里<text class="hl">唯一稳定的看空形态</text>：「下影线&gt;1.5%」次日红盘率只有 40.5%，比基准低 8.0 个百分点（z=-3.08，p=0.002），10 只股票里 8 只方向全部为负，股票级重采样复现率 0%（负向极稳）；再叠加「股价在5日线下方」时只有 38.4%（低 9.7 个百分点）。<text class="hl">看到长下影要提高警惕，别急着抄底。</text></view>
+        <template is="statTable" data="{{rows: report.wick_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.wick_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.wick}}</view>
       </view>
 
       <!-- 10. 分时走势：真实 5 分钟线分出的日内形态 -->
       <view class="stat-section">
-        <view class="stat-title">⑩ 分时走势：日内形态（BaoStock 真实5分钟线）</view>
-        <view class="stat-note">这一项用的是<b>真实分时</b>：BaoStock 每个交易日给 48 根 5 分钟线（09:35~11:30 + 13:05~15:00）。把这 48 根线按「什么时候见高、什么时候见低、均价线往哪走、尾盘拉不拉」归成 7 种形态，再看次日红绿。分类规则是固定阈值、按固定顺序判的，一天只落进一档（互斥可复现）；<b>先试过 K-means 聚类，轮廓系数只有 0.19、k≥5 直接出空簇</b>，说明日内形态不是天然分开的簇，硬聚类会造出不存在的边界，所以改用交易者看得懂的规则分档。</view>
-        <view class="stat-note">✅ 已验证：「S1 早盘冲高回落」层内红盘率 52.8%，比基准高 7.1 个百分点（p=0.0007，10 只股票里 7 只方向一致）；⚠️ 反向：「S2 早盘探底后回升」42.2%（p=0.0039，7 只方向为负）、「S5 均价线上翘」41.8%（p=0.0055，8 只方向为负）；⚠️ 边缘：「S7 横盘整理」50.7%（p=0.0628，8 只方向一致但没过 0.05，只供参考）。<b>形态只改变「赢不赢」的概率，不改变「赢的时候赚多少」</b>——各形态的红盘均涨都落在 1.89%~2.72%，和全样本基准 2.07% 基本一样。</view>
-        <view class="stat-note">更稳的一条底层规律（不受分类切法影响）：<b>当天最高价出现在开盘后前 1/4 的日子，次日偏红</b>（48.98% vs 基准 43.82%，p=0.0041，10 只股票里 7 只方向一致、只有 1 只相反）；最高点出现在后面的日子相反，次日偏绿（43.8%，p=0.0295，8 只方向为负）。S1 更强一点，是因为它额外要求了「收在低位、留长上影」。</view>
-        <scroll-view class="table-scroll" scroll-x="{{true}}" scroll-left="{{tblScroll}}" bindscroll="onTblScroll">
-        <view class="stat-table">
-          <view class="stat-table-row" wx:for="{{report.fenshi_stats}}" wx:key="index">
-            <text class="col-label {{item.isBestRatio ? 'highlight-ratio' : ''}} {{item.isBestAvg ? 'highlight-avg' : ''}}">{{item.label}}<text class="sig-tag {{item.marginal ? 'sig-marg' : (item.signal === 'neg' ? 'sig-neg' : (item.signal === 'pos' ? 'sig-pos' : ''))}}">{{item.marginal ? '⚠边缘' : (item.signal === 'neg' ? '⚠反向' : (item.signal === 'pos' ? '✅已验证' : ''))}}</text></text>
-            <text class="col-count {{item.isBestRatio ? 'red' : ''}} {{item.isBestAvg ? 'red-bold' : ''}}">{{item.red_count}}</text>
-            <text class="col-ratio {{item.isBestRatio ? 'red' : ''}}">{{item.red_ratio}}%</text>
-            <text class="col-rate {{item.isBestRatio ? 'red-bold' : ''}}">{{item.layer_rate}}%</text>
-            <text class="col-avg {{item.isBestAvg ? 'red bold' : ''}}">{{item.red_avg}}%</text>
-            <text class="col-count green">{{item.green_count}}</text>
-            <text class="col-ratio green">{{item.green_ratio}}%</text>
-            <text class="col-avg green">{{item.green_avg}}%</text>
-          </view>
-        </view>
-        </scroll-view>
+        <view class="stat-title">⑪ 分时走势：日内形态（BaoStock 真实5分钟线）</view>
+        <view class="stat-note">这一项用的是<text class="hl">真实分时</text>：BaoStock 每个交易日给 48 根 5 分钟线（09:35~11:30 + 13:05~15:00）。把这 48 根线按「什么时候见高、什么时候见低、均价线往哪走、尾盘拉不拉」归成 7 种形态，再看次日红绿。分类规则是固定阈值、按固定顺序判的，一天只落进一档（互斥可复现）；<text class="hl">先试过 K-means 聚类，轮廓系数只有 0.19、k≥5 直接出空簇</text>，说明日内形态不是天然分开的簇，硬聚类会造出不存在的边界，所以改用交易者看得懂的规则分档。</view>
+        <view class="stat-note">✅ 已验证：「S1 早盘冲高回落」层内红盘率 52.8%，比基准高 7.1 个百分点（p=0.0007，10 只股票里 7 只方向一致）；⚠️ 反向：「S2 早盘探底后回升」42.2%（p=0.0039，7 只方向为负）、「S5 均价线上翘」41.8%（p=0.0055，8 只方向为负）；⚠️ 边缘：「S7 横盘整理」50.7%（p=0.0628，8 只方向一致但没过 0.05，只供参考）。<text class="hl">形态只改变「赢不赢」的概率，不改变「赢的时候赚多少」</text>——各形态的红盘均涨都落在 1.89%~2.72%，和全样本基准 2.07% 基本一样。</view>
+        <view class="stat-note">更稳的一条底层规律（不受分类切法影响）：<text class="hl">当天最高价出现在开盘后前 1/4 的日子，次日偏红</text>（48.98% vs 基准 43.82%，p=0.0041，10 只股票里 7 只方向一致、只有 1 只相反）；最高点出现在后面的日子相反，次日偏绿（43.8%，p=0.0295，8 只方向为负）。S1 更强一点，是因为它额外要求了「收在低位、留长上影」。</view>
+        <template is="statTable" data="{{rows: report.fenshi_stats}}" />
+        <template is="verifyBlock" data="{{verified: report.fenshi_stats_verified}}" />
         <view class="stat-conclusion">结论：{{report.conclusions.fenshi}}</view>
       </view>
 
-      <!-- 图例说明 -->      <view class="legend-row">
+      <!-- 图例说明 -->
+      <view class="legend-row">
         <view class="legend-item"><view class="legend-dot ratio-dot"></view><text>红盘成功率最高</text></view>
         <view class="legend-item"><view class="legend-dot avg-dot"></view><text>红盘均涨最高</text></view>
       </view>
@@ -257,6 +189,7 @@
         <view class="legend-item"><text class="sig-neg">⚠反向</text><text>验证过的看空信号</text></view>
         <view class="legend-item"><text class="sig-marg">⚠边缘</text><text>方向一致但检验未过线，仅供参考</text></view>
       </view>
+      <view class="stat-note">已验证的层下方会标出具体统计量（p 值、z 值、10 只股票里几只方向一致）。<text class="hl">p 越小说明「这只股票碰巧撞上」的概率越低；「N/10只方向一致」说明换 10 只股票检验仍有几成保持同方向</text>——两个数字都能自己核对，不必只凭标签下判断。</view>
 
       <!-- 总体结论 -->
       <view class="overall-conclusion">
@@ -268,23 +201,27 @@
     <!-- Top10样本 -->
     <view class="card">
       <view class="section-title">🏆 Top10次日红盘样本</view>
-      <view class="top10-list">
-        <view class="top10-header">
-          <text class="col-date">日期</text>
-          <text class="col-pct">今日→明日</text>
-          <text class="col-other">量比/MA5/换手</text>
-          <text class="col-other2">均价线/收盘位/形态</text>
-        </view>
-        <view class="top10-row" wx:for="{{report.top10}}" wx:key="index">
-          <text class="col-date">{{item.date}}</text>
-          <text class="col-pct red">{{item.today_pct}}%→{{item.next_pct}}%</text>
-          <text class="col-other">{{item.vol_ratio}}/{{item.vs_ma5}}%/{{item.turnover}}%</text>
-          <view class="col-other2">
-            <view>{{item.vwap_diff}}%/{{item.close_pos}}%</view>
-            <view class="fenshi-tag">{{item.fenshi}}</view>
+      <view class="stat-note">「下影」「竞价」两列对应已验证的看空/看多信号⑩⑨的具体数值：下影线&gt;1.5% 时次日红盘率仅 40.5%，竞价温和放量（1.2~2.5倍）时为 62.5%。表格可左右滑动。</view>
+      <scroll-view class="table-scroll" scroll-x="{{true}}">
+        <view class="top10-list">
+          <view class="top10-header">
+            <text class="col-date">日期</text>
+            <text class="col-pct">今日→明日</text>
+            <text class="col-other">量比/MA5/MA20</text>
+            <text class="col-other2">均价线/收盘位</text>
+            <text class="col-other3">下影/竞价量比</text>
+            <text class="col-other4">日内形态</text>
+          </view>
+          <view class="top10-row" wx:for="{{report.top10}}" wx:key="date">
+            <text class="col-date">{{item.date}}</text>
+            <text class="col-pct red">{{item.today_pct}}%→{{item.next_pct}}%</text>
+            <text class="col-other">{{item.vol_ratio}}/{{item.vs_ma5}}%/{{item.vs_ma20}}%</text>
+            <text class="col-other2">{{item.vwap_diff}}%/{{item.close_pos}}%</text>
+            <text class="col-other3">{{item.low_shadow}}/{{item.auc_ratio}}</text>
+            <text class="col-other4">{{item.fenshi}}</text>
           </view>
         </view>
-      </view>
+      </scroll-view>
     </view>
 
     <!-- 风险提示 -->
@@ -293,6 +230,9 @@
     </view>
   </block>
 
-  <!-- 返回按钮 -->
-  <button class="btn-primary" bindtap="goBack" style="margin-top:30rpx;">🌾 再查一只</button>
+  <!-- 底部操作 -->
+  <view class="footer-actions" wx:if="{{report}}">
+    <button class="btn-secondary" bindtap="goBack">🌾 再查一只</button>
+    <button class="btn-share" open-type="share">📤 分享结果</button>
+  </view>
 </view>

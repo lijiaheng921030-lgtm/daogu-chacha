@@ -1,5 +1,6 @@
 <view class="container">
   <view class="page-title">历史记录</view>
+  <view class="page-sub" wx:if="{{!loading && history.length > 0}}">共 {{history.length}} 条 · 点击可重看当时的完整报告</view>
 
   <view class="loading" wx:if="{{loading}}">
     <view class="loading-spinner"></view>
@@ -7,15 +8,23 @@
 
   <view class="empty-tip" wx:if="{{!loading && history.length === 0}}">
     暂无历史记录
+    <view class="empty-sub">去首页查一只股票吧</view>
   </view>
 
   <view class="history-list" wx:if="{{history.length > 0}}">
-    <view class="history-item" wx:for="{{history}}" wx:key="ts">
+    <view class="history-item" wx:for="{{history}}" wx:key="ts" bindtap="onOpenItem" data-ts="{{item.ts}}">
       <view class="history-left">
-        <view class="history-name">{{item.stock_name}}</view>
-        <view class="history-date">{{item.date}}</view>
+        <view class="history-name">{{item.stock_name || '未知股票'}}</view>
+        <view class="history-meta">
+          <text class="history-code">{{item.stock_code}}</text>
+          <text class="history-date">{{item.date}} · 近{{item.days}}日</text>
+        </view>
+        <view class="history-detail" wx:if="{{item.verdict_detail}}">{{item.verdict_detail}}</view>
       </view>
-      <view class="verdict-badge verdict-{{item.verdict}}">{{item.verdict_text}}</view>
+      <view class="history-right">
+        <view class="verdict-badge verdict-{{item.verdict}}">{{item.verdict_text}}</view>
+        <view class="history-del" catchtap="onDeleteItem" data-ts="{{item.ts}}">删除</view>
+      </view>
     </view>
   </view>
 

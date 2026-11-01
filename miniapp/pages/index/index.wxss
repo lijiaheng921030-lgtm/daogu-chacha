@@ -4,7 +4,8 @@
 }
 
 .header-icon {
-  font-size: 80rpx;
+  width: 96rpx;
+  height: 96rpx;
   margin-bottom: 16rpx;
 }
 
@@ -17,12 +18,12 @@
 
 .header-sub {
   font-size: 24rpx;
-  color: #666666;
+  color: #8C8C8C;
 }
 
 .input-hint {
   font-size: 22rpx;
-  color: #666666;
+  color: #8C8C8C;
   margin-top: 12rpx;
 }
 
@@ -65,16 +66,18 @@
   font-weight: 600;
   background: rgba(212, 175, 55, 0.2);
   color: #D4AF37;
+  flex-shrink: 0;
 }
 
 .info-text {
   font-size: 26rpx;
   color: #B0B0B0;
+  flex: 1;
 }
 
 .info-desc {
   font-size: 24rpx;
-  color: #666666;
+  color: #8C8C8C;
   margin-top: 16rpx;
   line-height: 1.6;
 }
@@ -82,10 +85,39 @@
 .history-entry {
   text-align: center;
   font-size: 26rpx;
-  color: #666666;
+  color: #8C8C8C;
   padding: 30rpx 0;
 }
 
 .history-entry:active {
   color: #D4AF37;
+}
+
+/* 错误区：错误文案 + 重试按钮 */
+.error-wrap {
+  padding: 30rpx 0 10rpx;
+}
+
+.error-wrap .error-msg {
+  padding: 0 0 20rpx;
+}
+
+.btn-retry {
+  background: transparent;
+  border: 1rpx solid #E94560;
+  color: #E94560;
+  font-size: 26rpx;
+  border-radius: 40rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  margin: 0 auto;
+  width: 200rpx;
+}
+
+.btn-retry::after {
+  border: none;
+}
+
+.btn-retry:active {
+  background: rgba(233, 69, 96, 0.15);
 }

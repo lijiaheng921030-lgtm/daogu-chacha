@@ -368,10 +368,19 @@ app.post('/api/statAnalyze', async (req, res) => {
       const EPS = 1e-9;
       return rows.map(x => {
         const sig = validated.signalOf(dim, x.label);
+        // 通过跨股票验证的层，把完整统计量一起带出去：
+        // p 值、z 值、10 只股票里几只方向一致。
+        // 前端据此把「✅已验证」标签展开成可核对的数据，
+        // 用户能自己判断这是不是噪声，而不是只能选择信或不信。
+        const vStats = validated.verifyStatsOf(dim, x.label);
         return {
           ...x,
           signal: sig,                                   // 'pos' | 'neg' | null
           marginal: validated.isMarginal(dim, x.label), // true = 只是边缘显著
+          // 验证统计量（未通过验证的层为 null）
+          v_p: vStats ? vStats.p : null,
+          v_z: vStats ? vStats.z : null,
+          v_stocks: vStats ? vStats.stocks : null,
           isBestRatio: rateOk(x) && Math.abs(layerRate(x) - maxRate) < EPS,
           isBestAvg: avgOk(x) && Math.abs(parseFloat(x.red_avg) - maxAvg) < 1e-9,
         };
@@ -669,6 +678,16 @@ app.post('/api/statAnalyze', async (req, res) => {
       fenshi: conclusionText(fenshiStats, 'fenshi',
         '本维度没有验证过的涨幅层——各形态的「红盘日均涨」都落在 1.89%~2.72% 之间，和全样本基准 2.07% 基本一致（逐股方向一致性只有 2/10~6/10，远不到 7/10）。也就是说：日内形态能改变「赢不赢」的概率，但改变不了「赢的时候赚多少」'),
       cond: conclusionText(condStats, 'cond'),
+      // 换手率维度：没有做跨股票验证（各股流通盘不同，换手率口径不可跨股比较），
+      // 所以只做「本股内的分布描述」，不评选成功率最高/涨幅最高，
+      // 也不给 ✅/⚠ 标记 —— 免得用户以为这是漏验证了。
+      turn: (() => {
+        const rows = (turnStats || []).filter(r => !/缺失/.test(r.label));
+        if (!rows.length) return '换手率数据缺失，本维度无法统计';
+        const best = rows.reduce((a, b) =>
+          (parseFloat(b.layer_rate) > parseFloat(a.layer_rate) ? b : a));
+        return `换手率维度未做跨股票验证（各股流通盘不同，口径不可跨股比较），只做本股内分布参考。本股换手率分层中「${best.label}」层内红盘率最高（${best.layer_rate}%，${best.sample_count} 次样本），但该结论仅在本股历史内有效`;
+      })(),
       overall: `综合来看，最优买入条件为【${bestCondAvg ? bestCondAvg.label : '暂无'}】，红盘均涨最高（${bestCondAvg ? bestCondAvg.red_avg : '0'}%）；若追求稳定则关注【${bestCondRatio ? bestCondRatio.label : '暂无'}】（层内红盘率${bestCondRatio ? layerRate(bestCondRatio) : '0'}%）。分时走势方面，真实5分钟线分出的日内形态最关键的是【${dimPickText(fenshiStats, 'fenshi', 'isBestRatio')}】，收盘位置×均价线的交叉形态参考【${dimPickText(shapeStats, 'shape', 'isBestRatio')}】（层内红盘率${bestShapeRatio ? layerRate(bestShapeRatio) : '0'}%），收盘价与当日均价线的位置参考【${dimPickText(vwapStats, 'vwap', 'isBestRatio')}】，集合竞价量能参考【${dimPickText(aucStats, 'auc', 'isBestRatio')}】，长下影形态参考【${dimPickText(wickStats, 'wick', 'isBestRatio')}】；量能参考【${dimPickText(volStats, 'vol', 'isBestAvg')}】，5日线参考【${dimPickText(ma5Stats, 'ma5', 'isBestAvg')}】。注意：只有通过跨股票验证的层才会被标为「最高」，没验证过的维度会直说「无稳定信号」，不用单股噪声层充数。`
     };
 

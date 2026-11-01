@@ -185,6 +185,24 @@ function signalOf(dim, label) {
   return map[label] ? map[label].dir : null;
 }
 
+// 某层的完整验证统计量：{ dir, p, z, stocks, marginal }
+// 用途：前端把「✅已验证」标签展开成可核对的数据
+// （p 值多大、z 值多大、10 只股票里几只方向一致），
+// 让用户能自己判断这个信号是不是噪声，而不是只能选择信或不信。
+// 未通过验证的层返回 null。
+function verifyStatsOf(dim, label) {
+  const map = CROSS_VALIDATED_RATE[dim] || {};
+  const rec = map[label];
+  if (!rec) return null;
+  return {
+    dir: rec.dir,
+    p: rec.p,
+    z: rec.z,
+    stocks: rec.stocks,
+    marginal: !!rec.marginal
+  };
+}
+
 // 该维度是否存在任何通过验证的正向信号
 function hasPositiveRate(dim) {
   return rateEligibleLabels(dim).size > 0;
@@ -200,5 +218,6 @@ module.exports = {
   marginalPositiveLabels,
   isMarginal,
   signalOf,
+  verifyStatsOf,
   hasPositiveRate,
 };
