@@ -271,5 +271,79 @@ const marg = (fx.vwap_stats_verified || []).find((v) => v.marginal);
 check('边缘信号带 marginal 标记并注明', marg && marg.v_text.indexOf('仅边缘显著') !== -1,
   marg ? marg.v_text : '未找到');
 
-console.log(`\n========== 通过 ${pass} 项，失败 ${fail} 项 ==========`);
-process.exit(fail > 0 ? 1 : 0);
+// ---------- 后端请求层测试（多后端回退 + 冷启动预热） ----------
+console.log('\n=== 请求层测试 ===');
+const { request, warmup, API_BASES } = require('../miniapp/utils/api');
+
+check('API_BASES 有主后端', Array.isArray(API_BASES) && API_BASES.length >= 1, API_BASES.length + ' 个');
+check('API_BASES 全部是 https', API_BASES.every((u) => u.indexOf('https://') === 0));
+check('API_BASES 无重复', new Set(API_BASES).size === API_BASES.length);
+
+// 用假的 wx.request 驱动回退逻辑
+// key 用完整 URL（含主机），才能区分「哪个后端挂、哪个后端正常」
+function mockWx(behaviors) {
+  global.wx = {
+    request(opts) {
+      const b = behaviors[opts.url];
+      if (!b) {
+        setTimeout(() => opts.fail({ errMsg: 'request:fail no mock' }), 0);
+        return;
+      }
+      setTimeout(() => {
+        if (b.type === 'fail') opts.fail({ errMsg: b.msg || 'request:fail' });
+        else opts.success({ statusCode: b.status || 200, data: b.data });
+      }, 0);
+    }
+  };
+}
+
+// 场景1：第一个后端预热失败，第二个正常 → 应该成功并返回第二个的业务数据
+const BASE1 = API_BASES[0];
+const BASE2 = API_BASES[1] || API_BASES[0];
+mockWx({
+  [BASE1 + '/api/health']: { type: 'fail', msg: 'request:fail conn reset' },
+  [BASE2 + '/api/health']: { status: 200, data: { code: 0, msg: 'ok' } },
+  [BASE2 + '/api/statAnalyze']: { status: 200, data: { code: 0, data: { stock_name: '金安国纪' } } },
+});
+
+request('/api/statAnalyze', { stock_code: '002636', days: 120 })
+  .then((body) => {
+    check('后端回退：首个不可用时能用第二个返回数据',
+      body && body.code === 0 && body.data.stock_name === '金安国纪',
+      JSON.stringify(body));
+  })
+  .catch((e) => {
+    check('后端回退：首个不可用时能用第二个返回数据', false, '异常: ' + e.message);
+  })
+  .then(() => {
+    // 场景2：业务错误（404）应直接抛给调用方，不换后端
+    mockWx({
+      [BASE1 + '/api/health']: { status: 200, data: { code: 0, msg: 'ok' } },
+      [BASE1 + '/api/statAnalyze']: { status: 200, data: { code: 404, msg: '未找到该股票' } },
+    });
+    return request('/api/statAnalyze', { stock_code: '999999', days: 120 });
+  })
+  .then((body) => {
+    check('业务错误直接返回给调用方（不当作后端故障）',
+      body && body.code === 404 && body.msg === '未找到该股票',
+      JSON.stringify(body));
+  })
+  .catch((e) => {
+    check('业务错误直接返回给调用方（不当作后端故障）', false, '异常: ' + e.message);
+  })
+  .then(() => {
+    // 场景3：全部后端不可用 → 应 reject，且带上原因
+    mockWx({});
+    return request('/api/statAnalyze', { stock_code: '002636' }).then(
+      () => ({ ok: false }),
+      (e) => ({ ok: true, code: e.code, reason: e.detail && e.detail.reason })
+    );
+  })
+  .then((r) => {
+    check('全部后端不可用时 reject 并标明原因',
+      r.ok && r.code === 'ALL_BASES_FAILED' && (r.reason === 'down' || r.reason === 'network'),
+      JSON.stringify(r));
+    delete global.wx;
+    console.log(`\n========== 通过 ${pass} 项，失败 ${fail} 项 ==========`);
+    process.exit(fail > 0 ? 1 : 0);
+  });

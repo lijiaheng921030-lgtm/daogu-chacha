@@ -1,9 +1,7 @@
 const app = getApp();
 const { deriveVerdict } = require('../../utils/verdict');
 const historyStore = require('../../utils/history');
-
-// 后端要拉 5 分钟线 + 做跨股票检验，给足超时时间
-const REQUEST_TIMEOUT = 60000;
+const { request } = require('../../utils/api');
 
 Page({
   data: {
@@ -70,17 +68,11 @@ Page({
     if (this.data.loading) return;
     this.setData({ loading: true, errorMsg: '', canRetry: false });
 
-    wx.request({
-      url: `${app.globalData.apiBase}/api/statAnalyze`,
-      method: 'POST',
-      header: { 'Content-Type': 'application/json' },
-      data: { stock_code: keyword, days: this.data.selectedDays.value },
-      timeout: REQUEST_TIMEOUT,
-      success: (res) => {
+    request('/api/statAnalyze', { stock_code: keyword, days: this.data.selectedDays.value })
+      .then((body) => {
         this.setData({ loading: false });
 
         // 后端异常时可能返回非对象或空 body，先兜底
-        const body = res.data;
         if (!body || typeof body !== 'object') {
           this.setData({
             errorMsg: '服务器返回异常，请稍后重试',
@@ -97,24 +89,32 @@ Page({
             canRetry: true
           });
         }
-      },
-      fail: (err) => {
+      })
+      .catch((err) => {
         this.setData({ loading: false });
         console.error('请求失败', err);
-        const msg = (err && err.errMsg) || '';
-        if (/timeout/i.test(msg)) {
+
+        // 所有后端都联系不上 —— 提示用户稍后重试，而不是"检查网络"，
+        // 因为多半是服务端在冷启动或临时故障，不是用户网络的问题
+        const detail = err && err.detail;
+        const reason = detail && detail.reason;
+        if (reason === 'timeout') {
           this.setData({
-            errorMsg: '分析超时（超过60秒），数据量较大的股票需要更久，请重试',
+            errorMsg: '分析超时（数据量较大时需要更久），请重试',
+            canRetry: true
+          });
+        } else if (reason === 'down') {
+          this.setData({
+            errorMsg: '服务暂时不可用（可能正在启动），请稍后重试',
             canRetry: true
           });
         } else {
           this.setData({
-            errorMsg: '网络请求失败，请检查网络后重试',
+            errorMsg: '网络请求失败，请稍后重试',
             canRetry: true
           });
         }
-      }
-    });
+      });
   },
 
   // 按后端错误码给出可操作的提示，而不是笼统的「查询失败」

@@ -1,8 +1,12 @@
 const historyStore = require('./utils/history');
+const { API_BASES } = require('./utils/api');
 
 App({
   globalData: {
-    apiBase: 'https://daogu-server-production.up.railway.app',
+    // 后端地址清单（按优先级）。实际请求由 utils/api.js 负责：
+    // 依次尝试、失败自动回退，并在请求前先预热以应对冷启动。
+    // 保留在这里只是为了方便全局读取和调试。
+    apiBases: API_BASES,
     historyKey: historyStore.HISTORY_KEY,
   },
 
