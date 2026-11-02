@@ -1,7 +1,7 @@
 services:
   - type: web
     name: daogu-chacha
-    env: node
+    runtime: node
     region: oregon
     plan: free
     rootDir: server
@@ -10,7 +10,7 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: PORT
-        value: 3002
+        value: "3002"
       # 用 t.xiaodefa.top 代理验证过的有效 token
       # （render.yaml 会入库，token 不算高度敏感——代理本身是公共服务，
       #   且这个 token 只能调 Tushare 接口、不能提现或改密码。
@@ -23,11 +23,26 @@ services:
   # 防休眠：Render 免费版 15 分钟没有请求就休眠，下次请求要先花 ~30 秒唤醒。
   # 而一次统计查询本身就要 40~50 秒，两者叠加会超过小程序 wx.request 的 60 秒上限。
   # 每 10 分钟 ping 一次 /api/health 让容器保持常驻。
+  #
+  # 注意 Blueprint spec：
+  #   - schedule 必须是 cron 表达式，不能写 "every 10 minutes"
+  #   - cron job 没有 url 字段，目标地址要用 fromService 引用
   - type: cron
     name: keep-alive
-    schedule: every 10 minutes
-    url: /api/health
-    fromService:
-      type: web
-      name: daogu-chacha
-      property: host
+    runtime: python
+    schedule: '*/10 * * * *'
+    buildCommand: 'true'
+    startCommand: >
+      python -c 'import os,urllib.request;
+      urllib.request.urlopen("http://" + os.environ["HEALTH_HOST"] + ":" + os.environ["HEALTH_PORT"] + "/api/health", timeout=20)'
+    envVars:
+      - key: HEALTH_HOST
+        fromService:
+          type: web
+          name: daogu-chacha
+          property: host
+      - key: HEALTH_PORT
+        fromService:
+          type: web
+          name: daogu-chacha
+          property: port
