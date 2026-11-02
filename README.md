@@ -46,16 +46,18 @@ Railway (Docker)  /  Render
 ```
 daogu_chacha/
 ├── miniapp/                    微信小程序前端
-│   ├── app.js                  全局配置（apiBase 在这里）
+│   ├── app.js                  全局配置
 │   ├── app.json                页面/tabBar/窗口配置
 │   ├── app.wxss                全局样式
 │   ├── utils/
-│   │   ├── verdict.js          A/B/C 裁决推导（从真实分层数据算，不硬编码）
-│   │   └── history.js          历史记录 + 报告缓存管理
+│   │   ├── api.js               请求层（多后端回退 + 冷启动预热 + 错误分级）
+│   │   ├── report.js            报告预处理（验证统计量文案）
+│   │   ├── verdict.js           A/B/C 裁决推导（从真实分层数据算，不硬编码）
+│   │   └── history.js           历史记录 + 报告缓存管理
 │   ├── images/                 图标资源
 │   └── pages/
 │       ├── index/              首页（搜索、样本区间、快捷股）
-│       ├── result/             结果页（10 维度统计表 + Top10）
+│       ├── result/             结果页（11 维度统计表 + 验证明细 + Top10）
 │       └── history/            历史记录页
 ├── server/                     Node.js 后端
 │   ├── index.js                Express 服务 + /api/statAnalyze
@@ -68,7 +70,9 @@ daogu_chacha/
 ├── tools/
 │   ├── gen-tab-icons.js        生成 tabBar 图标 PNG
 │   ├── check-miniapp.js        小程序静态检查
-│   └── test-logic.js           业务逻辑单元测试
+│   ├── test-logic.js           业务逻辑单元测试
+│   ├── fixture.js              离线报告样本（与生产同结构）
+│   └── render-preview.js       WXML → HTML 离线预览渲染器
 ├── Dockerfile / railway.json   Railway 部署
 ├── render.yaml                 Render 部署
 └── .github/workflows/deploy.yml  Cloudflare Worker 部署（当前未使用）
@@ -78,44 +82,67 @@ daogu_chacha/
 
 ## 部署
 
-### 一、后端（Railway，当前生产环境）
+### 一、后端（Render，当前生产环境）
 
-1. 推送到 GitHub 仓库。
-2. Railway → New Project → 从 GitHub 导入。
-3. Railway 会自动读取 `railway.json` 和 `Dockerfile`：
-   - 构建：`dockerfile: ./Dockerfile`，context 为仓库根目录
-   - 健康检查：`/api/health`，超时 60 秒
-   - 端口：`server/index.js` 读 `process.env.PORT`，Railway 会自动注入
-4. **配置环境变量** `TUSHARE_TOKEN`（值见 `server/backtest.js` 顶部的默认值，
-   或去 Tushare 个人中心复制自己的 token）。
-5. 部署完成后拿到域名，形如 `https://xxx.up.railway.app`。
+> **为什么从 Railway 迁走**：Railway 试用计划已于 2026-11 到期，
+> `railway up` 直接被拒（`Your trial has expired`），服务状态变成 Failed。
+> 代码本身没问题 —— 本地 `node server/index.js` 跑通，Railway 日志里
+> 也显示容器确实启动过（`稻谷查查1.0 运行在 http://localhost:3002`）。
 
-> ⚠️ 当前 `server/backtest.js` 里硬编码了一个 Tushare Token。
-> 建议改为只从环境变量读取，token 泄漏后也能在后台一键轮换。
+1. 推送到 GitHub 仓库（`render.yaml` 已在仓库根目录）。
+2. Render → **New** → **Blueprint** → 选 `lijiaheng921030-lgtm/daogu-chacha` 仓库
+   → Render 会自动读取 `render.yaml` → 点 **Apply**。
+3. Render 会创建两个资源：
+   - **web service `daogu-chacha`**：`rootDir: server`，构建 `npm install`，
+     启动 `node index.js`，健康检查 `/api/health`，free plan
+   - **cron job `keep-alive`**：每 10 分钟 ping 一次 `/api/health`
+     （free plan 15 分钟无请求会休眠，唤醒要 ~30 秒，
+     而一次统计查询本身要 40~50 秒，两者叠加会超小程序 60 秒上限，
+     所以必须靠这个 cron 保持常驻）
+4. 部署完成后拿到域名，形如 `https://daogu-chacha.onrender.com`。
+5. 把新域名填进 `miniapp/utils/api.js` 的 `API_BASES` **第一位**：
 
-### 二、后端（Render，备选）
+```javascript
+const API_BASES = [
+  'https://daogu-chacha.onrender.com',   // 新后端放最前
+  'https://daogu-server-production.up.railway.app',  // 旧的留作兜底
+];
+```
 
-`render.yaml` 已写好，`rootDir: server`，构建 `npm install`，启动 `node index.js`，
-健康检查 `/api/health`。在 Render 上 New → Blueprint → 选仓库即可。
-Render 同样需要设置 `TUSHARE_TOKEN` 环境变量。
+> **关于 Tushare Token**：`render.yaml` 里写了默认值，部署后即可直接用。
+> 代码里是 `process.env.TUSHARE_TOKEN || '<默认值>'` 的双重保险 ——
+> 环境变量优先，缺失时回落到默认值，保证部署后不会因为漏配变量而起不来。
+> 如果要更高安全性：在 Render 控制台把 `TUSHARE_TOKEN` 改成 **Secret**，
+> 或直接轮换代理 token（只有这一个调用点会用到）。
+
+### 二、后端（Railway，已停用）
+
+配置仍在 `railway.json` / `Dockerfile`，随时可以恢复：
+Railway → 升级到 Hobby 计划（$5/月）→ `railway up`。
+不升级的话 Railway 会一直拒绝部署。
 
 ### 三、小程序
 
 1. 微信开发者工具 → 导入项目 → 目录选 `f:/daogu_chacha/miniapp/`
 2. AppID 填 `wx4fae3c135a32c1cc`（测试可用「测试号」）
-3. 修改 `miniapp/app.js` 里的后端地址：
-
-```javascript
-apiBase: 'https://你的域名.up.railway.app'
-```
-
-4. **配置合法域名**（正式版必需）：
+3. **配置合法域名**（正式版必需）：
    微信公众平台 → 开发管理 → 开发设置 → 服务器域名 →
-   request 合法域名填入你的后端域名（Railway/Render 域名不需要备案，
+   request 合法域名填入你的后端域名（Render 域名不需要备案，
    但必须是 HTTPS 且已备案的域名才能加进白名单）。
 
-5. `project.config.json` 里 `urlCheck` 已设为 `true`，
+4. `project.config.json` 里 `urlCheck` 已设为 `true`，
    意味着域名没配好时开发者工具会直接报错，不会静默失败。
+
+#### 请求层说明（`miniapp/utils/api.js`）
+
+小程序端不直接 `wx.request`，统一走这个封装，它负责三件事：
+
+- **多后端回退**：`API_BASES` 逐个尝试，第一个失败自动换下一个。
+- **冷启动预热**：每次业务请求前先 `GET /api/health`。
+  服务已热时几百毫秒返回；休眠时这个请求会等容器启动完（约 30 秒），
+  拆成两次请求后各自都不超 `wx.request` 的 60 秒上限。
+- **错误分级**：网络错误 / 超时 / 5xx 视为后端故障（换下一个）；
+  业务错误（404 查无此股等）直接交给调用方，换后端没意义。
 
 ---
 
@@ -130,7 +157,8 @@ TUSHARE_TOKEN=你的token node index.js
 # 默认监听 http://localhost:3002
 ```
 
-然后把 `miniapp/app.js` 的 `apiBase` 临时改成 `http://localhost:3002`。
+本地调试时把 `miniapp/utils/api.js` 的 `API_BASES` 临时改成
+`['http://localhost:3002']`（真机调试请用局域网 IP 或内网穿透）。
 注意：微信开发者工具默认会校验合法域名，本地调试需要在
 「详情 → 本地设置」里勾选「不校验合法域名」。
 
