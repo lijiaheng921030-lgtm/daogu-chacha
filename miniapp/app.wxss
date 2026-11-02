@@ -403,7 +403,9 @@ page {
   background: #1A1A1A;
   border-radius: 12rpx;
   overflow: hidden;
-  min-width: 980rpx;
+  /* 要能容下各列宽度之和（含 padding），
+     否则 overflow:hidden 会把最右侧的列裁掉 */
+  min-width: 1040rpx;
 }
 
 .top10-header {
@@ -431,7 +433,9 @@ page {
 /* 「-3.21%→5.67%」需要约 180rpx，窄了会被截断 */
 .col-pct {
   flex: 1;
-  min-width: 180rpx;
+  /* 「-10.00%→10.00%」需要约 210rpx（真实数据会撞到涨停 ±10%），
+     之前按样例数据的「-3.21%→5.67%」定的 180rpx 会截断 */
+  min-width: 220rpx;
 }
 
 .col-pct.red {
