@@ -19,3 +19,15 @@ services:
         value: 408d073d81acebc8bc76faa303be7de7d0067343625bc2fcc9869aea
       - key: TUSHARE_URL
         value: https://t.xiaodefa.top/
+
+  # 防休眠：Render 免费版 15 分钟没有请求就休眠，下次请求要先花 ~30 秒唤醒。
+  # 而一次统计查询本身就要 40~50 秒，两者叠加会超过小程序 wx.request 的 60 秒上限。
+  # 每 10 分钟 ping 一次 /api/health 让容器保持常驻。
+  - type: cron
+    name: keep-alive
+    schedule: every 10 minutes
+    url: /api/health
+    fromService:
+      type: web
+      name: daogu-chacha
+      property: host
